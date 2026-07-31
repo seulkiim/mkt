@@ -1,0 +1,18 @@
+{
+  "name": "s3tool",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1079.0",
+    "hyparquet": "^1.26.2",
+    "mcp-server-s3": "^1.0.1"
+  }
+}
