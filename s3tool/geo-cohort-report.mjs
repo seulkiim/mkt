@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 
 const BASE   = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS = ["com.albus.idolharvest", "id6756664337"];
@@ -236,7 +237,7 @@ for(const e of Object.values(cohort)){
 dailyOut.sort((a,b)=>a.date.localeCompare(b.date)||a.media.localeCompare(b.media)||b.revenue-a.revenue);
 cohortOut.sort((a,b)=>a.cohort_date.localeCompare(b.cohort_date)||a.media.localeCompare(b.media)||b.rev_d3-a.rev_d3);
 
-writeFileSync("C:/Users/STZ940/s3tool/geo-cohort-result.json", JSON.stringify({daily:dailyOut,cohort:cohortOut},null,2),"utf8");
+writeFileSync(dataPath("geo-cohort-result.json"), JSON.stringify({daily:dailyOut,cohort:cohortOut},null,2),"utf8");
 process.stderr.write(`\nDone! daily=${dailyOut.length} cohort=${cohortOut.length} rows\n`);
 process.stdout.write(`daily rows: ${dailyOut.length}, cohort rows: ${cohortOut.length}\n`);
 // 국가 요약

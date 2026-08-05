@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS=["com.albus.idolharvest","id6756664337"];
 const START="2026-07-07";
@@ -142,7 +143,7 @@ for(const dt of await dts("skad_installs")){
 }
 const instOut=Object.values(INST);
 
-writeFileSync("C:/Users/STZ940/s3tool/format-tree-result.json", JSON.stringify({rows:out,installs:instOut},null,2),"utf8");
+writeFileSync(dataPath("format-tree-result.json"), JSON.stringify({rows:out,installs:instOut},null,2),"utf8");
 process.stdout.write(`rows: ${out.length}\n`);
 const byF={};for(const r of out)byF[r.format]=(byF[r.format]||0)+r.d1;
 let t0=0,t1=0,t3=0,t7=0;for(const r of out){t0+=r.d0;t1+=r.d1;t3+=r.d3;t7+=r.d7;}

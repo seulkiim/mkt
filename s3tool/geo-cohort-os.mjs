@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync, readFileSync, renameSync } from "fs";
+import { dataPath } from "./paths.mjs";
 
 const BASE   = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const OS_OF = { "com.albus.idolharvest":"Android", "id6756664337":"iOS" };
@@ -32,6 +33,42 @@ async function dtList(tbl,minDt){const base=`${BASE}t=${tbl}/`;const ps=await li
 const R={};
 const K=(m,c,o,camp,d)=>`${m}|||${c}|||${o}|||${camp}|||${d}`;
 function get(m,c,o,camp,d){const k=K(m,c,o,camp,d);if(!R[k])R[k]={media:m,country:c,os:o,campaign:camp,date:d,ir:0,is:0,cost:0,imp:0,clk:0,d1_iap:0,d1_iaa:0,d3_iap:0,d3_iaa:0,d7_iap:0,d7_iaa:0,d14_iap:0,d14_iaa:0,d21_iap:0,d21_iaa:0,d30_iap:0,d30_iaa:0,skan_rev:0,pur_d1:new Set(),pur_d3:new Set(),rr1_users:0,rr3_users:0,rr7_users:0,rr30_users:0};return R[k];}
+
+// ══ 소재(creative) 뎁스 추가용 보조 누적기(RC, 사용자 요청) ══
+// 기존 R(일자별, 소재 없음)은 완전히 그대로 두고 — Summary/Cohort Trend 탭과 매일 스케줄
+// 갱신에 영향 없음 — 캠페인 하위에 소재까지 분해한 뷰만 별도로 추가한다. 소재를 추가하면
+// 캠페인×소재×일자 조합이 크게 늘어나므로, 이 누적기만 일자 대신 "주차"(캠페인 시작일
+// 2026-07-07부터 7일 단위)로 묶어 데이터량을 줄인다. Day-N 코호트 판정(dd)은 항상 실제
+// 설치일 기준으로 계산한 뒤 그 결과를 주차 버킷에 합산하므로 정확도 손실은 없다.
+const RC={};
+const KC=(m,c,o,camp,cre,w)=>`${m}|||${c}|||${o}|||${camp}|||${cre}|||${w}`;
+function getC(m,c,o,camp,cre,w){const k=KC(m,c,o,camp,cre,w);if(!RC[k])RC[k]={media:m,country:c,os:o,campaign:camp,creative:cre,week:w,ir:0,is:0,cost:0,imp:0,clk:0,d1_iap:0,d1_iaa:0,d3_iap:0,d3_iaa:0,d7_iap:0,d7_iaa:0,d14_iap:0,d14_iaa:0,d21_iap:0,d21_iaa:0,d30_iap:0,d30_iaa:0,skan_rev:0,pur_d1:new Set(),pur_d3:new Set(),rr1_users:0,rr3_users:0,rr7_users:0,rr30_users:0};return RC[k];}
+const START_T=Date.parse(START+"T00:00:00Z");
+const END_T=Date.parse(endStr+"T00:00:00Z");
+// 주차 라벨: "MM/DD~MM/DD" (버킷 끝이 아직 도래하지 않았으면 실제 데이터 마지막 날짜까지만 표시)
+function weekLabel(dateStr){
+  const t=Date.parse(dateStr+"T00:00:00Z");
+  const idx=Math.floor((t-START_T)/(7*86400000));
+  const s=new Date(START_T+idx*7*86400000).toISOString().slice(0,10);
+  const eT=Math.min(START_T+idx*7*86400000+6*86400000, END_T);
+  const e=new Date(eT).toISOString().slice(0,10);
+  return `${s.slice(5)}~${e.slice(5)}`;
+}
+function creativeLabel(raw,media){
+  const s=raw==null?"":String(raw).trim();
+  if(s)return s;
+  return media==="organic"?"(organic)":"(no creative)";
+}
+// Google Ads(googleadwords_int)는 매체 특성상 소재(af_ad/ad) 단위 데이터를 공유하지 않아 항상
+// 비어있다(사용자 확인) — 대신 ad_group(af_adset/adset)을 소재명으로 대체 사용한다.
+function pickCreativeStd(r,media){ // installs/inapps/ad_revenue_v2/cohort_unified: af_ad/af_adset
+  if(media==="googleadwords_int" && !String(r.af_ad??"").trim())return r.af_adset;
+  return r.af_ad;
+}
+function pickCreativeCost(r,media){ // cost_etl_geo: ad/adset
+  if(media==="googleadwords_int" && !String(r.ad??"").trim())return r.adset;
+  return r.ad;
+}
 // D21/D30 예측(사용자 요청)용 — OS별, 설치일별, "설치 후 정확히 N일째"(dd) 매출을 세분화해 누적한다.
 // 국가·캠페인은 합산(pooled)해 예측 곡선의 재료로만 쓴다: 개별 국가는 표본이 작아 일자별 곡선이
 // 너무 들쭉날쭉하므로, OS 단위로 풀링한 "코호트 나이(day)별 누적 ROAS 증가 형태"를 기준 곡선으로 잡고
@@ -96,16 +133,17 @@ process.stderr.write("[1] cost\n");
     if(!vs.length)continue;
     const coarse={}, fine={};
     for(const f of await listParquet(vs[0].prefix)){
-      const rows=await readParquet(f,["app_id","media_source","date","geo","campaign","cost","impressions","clicks"]);
+      const rows=await readParquet(f,["app_id","media_source","date","geo","campaign","cost","impressions","clicks","ad","adset"]);
       for(const r of rows){
         const os=OS_OF[r.app_id]; if(!os)continue;
         const kd=r.date?String(r.date).slice(0,10):null; if(!kd||!inRange(kd))continue;
         const media=r.media_source||"organic";
         const camp=campLabel(r.campaign,media);
+        const cre=creativeLabel(pickCreativeCost(r,media),media);
         const country=campCountryStrict(r.campaign)||(r.geo||"??");
         const cost=num(r.cost), imp=num(r.impressions), clk=num(r.clicks);
         const kc=`${media}|||${country}|||${os}|||${kd}`;
-        const kf=`${media}|||${country}|||${os}|||${camp}|||${kd}`;
+        const kf=`${media}|||${country}|||${os}|||${camp}|||${cre}|||${kd}`;
         coarse[kc]=(coarse[kc]||0)+cost;
         const fe=(fine[kf]=fine[kf]||{cost:0,imp:0,clk:0}); fe.cost+=cost; fe.imp+=imp; fe.clk+=clk;
       }
@@ -116,14 +154,15 @@ process.stderr.write("[1] cost\n");
   // winDt[kc] = 각 코어스 키의 신뢰값을 제공한 우승 dt 스냅샷.
   const trustedCoarse={}, winDt={};
   for(const dt of dts.slice().sort())for(const [k,v] of Object.entries(byDtCoarse[dt]||{})){trustedCoarse[k]=v;winDt[k]=dt;}
-  // 캠페인 분해: 각 fine 행을, 그 코어스 부모의 우승 dt 스냅샷에서만 채택.
+  // 캠페인·소재 분해: 각 fine 행을, 그 코어스 부모의 우승 dt 스냅샷에서만 채택.
   // → 같은 스냅샷 내부이므로 fine 합 = 코어스 신뢰값과 정확히 일치(비례배분/fallback 불필요, 총액 불변).
   for(const dt of dts){
     for(const [kf,fe] of Object.entries(byDtFine[dt]||{})){
-      const p=kf.split("|||");                       // m,geo,os,camp,date
-      const kc=`${p[0]}|||${p[1]}|||${p[2]}|||${p[4]}`;
+      const p=kf.split("|||");                       // m,geo,os,camp,cre,date
+      const kc=`${p[0]}|||${p[1]}|||${p[2]}|||${p[5]}`;
       if(winDt[kc]!==dt)continue;                     // 우승 dt만
-      const e=get(p[0],p[1],p[2],p[3],p[4]); e.cost+=fe.cost; e.imp+=fe.imp; e.clk+=fe.clk;
+      const e=get(p[0],p[1],p[2],p[3],p[5]); e.cost+=fe.cost; e.imp+=fe.imp; e.clk+=fe.clk;
+      const ec=getC(p[0],p[1],p[2],p[3],p[4],weekLabel(p[5])); ec.cost+=fe.cost; ec.imp+=fe.imp; ec.clk+=fe.clk;
     }
   }
 }
@@ -134,8 +173,15 @@ for(const dt of await dtList("installs","dt=2026-07-06")){
   for(const hp of await listPrefixes(`${BASE}t=installs/${dt}/`)){
     for(const appId of APP_IDS){const os=OS_OF[appId];
       for(const f of await listParquet(`${hp}app_id=${appId}/`)){
-        const rows=await readParquet(f,["install_time","media_source","country_code","campaign"]);
-        for(const r of rows){const kd=toKSTDate(r.install_time);if(!kd||!inRange(kd))continue;const media=r.media_source||"organic";get(media,campCountryStrict(r.campaign)||(r.country_code||"??"),os,campLabel(r.campaign,media),kd).ir++;}
+        const rows=await readParquet(f,["install_time","media_source","country_code","campaign","af_ad","af_adset"]);
+        for(const r of rows){
+          const kd=toKSTDate(r.install_time);if(!kd||!inRange(kd))continue;
+          const media=r.media_source||"organic";
+          const country=campCountryStrict(r.campaign)||(r.country_code||"??");
+          const camp=campLabel(r.campaign,media);
+          get(media,country,os,camp,kd).ir++;
+          getC(media,country,os,camp,creativeLabel(pickCreativeStd(r,media),media),weekLabel(kd)).ir++;
+        }
       }
     }
   }
@@ -148,8 +194,16 @@ for(const dt of await dtList("skad_installs","dt=2026-07-06")){
   for(const hp of await listPrefixes(`${BASE}t=skad_installs/${dt}/`)){
     for(const appId of APP_IDS){const os=OS_OF[appId];
       for(const f of await listParquet(`${hp}app_id=${appId}/`)){
-        const rows=await readParquet(f,["install_date","media_source","af_attribution_flag","ad_network_campaign_name"]);
-        for(const r of rows){if(String(r.af_attribution_flag).toLowerCase()==="true")continue;const kd=r.install_date?String(r.install_date).slice(0,10):null;if(!kd||!inRange(kd))continue;get(r.media_source||"unknown",campCountry(r.ad_network_campaign_name),os,campLabel(r.ad_network_campaign_name,r.media_source||"unknown"),kd).is++;}
+        const rows=await readParquet(f,["install_date","media_source","af_attribution_flag","ad_network_campaign_name","ad_network_ad_name"]);
+        for(const r of rows){
+          if(String(r.af_attribution_flag).toLowerCase()==="true")continue;
+          const kd=r.install_date?String(r.install_date).slice(0,10):null;if(!kd||!inRange(kd))continue;
+          const media=r.media_source||"unknown";
+          const camp=campLabel(r.ad_network_campaign_name,media);
+          const country=campCountry(r.ad_network_campaign_name);
+          get(media,country,os,camp,kd).is++;
+          getC(media,country,os,camp,creativeLabel(r.ad_network_ad_name,media),weekLabel(kd)).is++;
+        }
       }
     }
   }
@@ -167,20 +221,25 @@ function apply(r,kind,os){
   const media=r.media_source||"organic";
   const country=campCountryStrict(r.campaign)||(r.country_code||"??");
   const camp=campLabel(r.campaign,media);
+  const cre=creativeLabel(pickCreativeStd(r,media),media);
   const e=get(media,country,os,camp,ind);
+  const ec=getC(media,country,os,camp,cre,weekLabel(ind));
   curveGet(os,ind).dayRev[Math.min(dd,DAY_MAX)]+=rev;
   // Active REV(캘린더 날짜 기준, 코호트 아님): 이 이벤트가 실제로 발생한 날짜(evd)에 귀속.
   if(inRange(evd))getDA(media,country,os,camp,evd).active_rev+=rev;
-  if(dd<=1){ if(kind==="iap")e.d1_iap+=rev; else e.d1_iaa+=rev; }
-  if(dd<=3){ if(kind==="iap")e.d3_iap+=rev; else e.d3_iaa+=rev; }
-  if(dd<=7){ if(kind==="iap")e.d7_iap+=rev; else e.d7_iaa+=rev; }
-  if(dd<=14){ if(kind==="iap")e.d14_iap+=rev; else e.d14_iaa+=rev; }
-  if(dd<=21){ if(kind==="iap")e.d21_iap+=rev; else e.d21_iaa+=rev; }
-  if(dd<=30){ if(kind==="iap")e.d30_iap+=rev; else e.d30_iaa+=rev; }
+  if(dd<=1){ if(kind==="iap"){e.d1_iap+=rev;ec.d1_iap+=rev;} else {e.d1_iaa+=rev;ec.d1_iaa+=rev;} }
+  if(dd<=3){ if(kind==="iap"){e.d3_iap+=rev;ec.d3_iap+=rev;} else {e.d3_iaa+=rev;ec.d3_iaa+=rev;} }
+  if(dd<=7){ if(kind==="iap"){e.d7_iap+=rev;ec.d7_iap+=rev;} else {e.d7_iaa+=rev;ec.d7_iaa+=rev;} }
+  if(dd<=14){ if(kind==="iap"){e.d14_iap+=rev;ec.d14_iap+=rev;} else {e.d14_iaa+=rev;ec.d14_iaa+=rev;} }
+  if(dd<=21){ if(kind==="iap"){e.d21_iap+=rev;ec.d21_iap+=rev;} else {e.d21_iaa+=rev;ec.d21_iaa+=rev;} }
+  if(dd<=30){ if(kind==="iap"){e.d30_iap+=rev;ec.d30_iap+=rev;} else {e.d30_iaa+=rev;ec.d30_iaa+=rev;} }
   // 유료 결제자(distinct 사용자 수) — IAP(af_purchase)만, appsflyer_id로 중복 제거. D1/D3 누적.
   if(kind==="iap"){
     const uid=r.appsflyer_id||r.customer_user_id;
-    if(uid){ if(dd<=1)e.pur_d1.add(uid); if(dd<=3)e.pur_d3.add(uid); }
+    if(uid){
+      if(dd<=1){e.pur_d1.add(uid);ec.pur_d1.add(uid);}
+      if(dd<=3){e.pur_d3.add(uid);ec.pur_d3.add(uid);}
+    }
   }
 }
 // IAP
@@ -188,7 +247,7 @@ for(const dt of await dtList("inapps","dt=2026-07-06")){
   for(const hp of await listPrefixes(`${BASE}t=inapps/${dt}/`)){
     for(const appId of APP_IDS){const os=OS_OF[appId];
       for(const f of await listParquet(`${hp}app_id=${appId}/`)){
-        const rows=await readParquet(f,["event_time","install_time","event_name","event_revenue_usd","media_source","country_code","campaign","appsflyer_id","customer_user_id"]);
+        const rows=await readParquet(f,["event_time","install_time","event_name","event_revenue_usd","media_source","country_code","campaign","appsflyer_id","customer_user_id","af_ad","af_adset"]);
         for(const r of rows)if(r.event_name==="af_purchase")apply(r,"iap",os);
       }
     }
@@ -202,7 +261,7 @@ for(const tbl of ["attributed_ad_revenue_v2","organic_ad_revenue_v2","retargetin
     if(!vs.length)continue;
     for(const appId of APP_IDS){const os=OS_OF[appId];
       for(const f of await listParquet(`${vs[0].prefix}app_id=${appId}/`)){
-        const rows=await readParquet(f,["event_time","install_time","event_revenue_usd","media_source","country_code","campaign"]);
+        const rows=await readParquet(f,["event_time","install_time","event_revenue_usd","media_source","country_code","campaign","af_ad","af_adset"]);
         for(const r of rows)apply(r,"iaa",os);
       }
     }
@@ -216,14 +275,17 @@ for(const dt of await dtList("skad_inapps","dt=2026-07-06")){
   for(const hp of await listPrefixes(`${BASE}t=skad_inapps/${dt}/`)){
     for(const appId of APP_IDS){const os=OS_OF[appId];
       for(const f of await listParquet(`${hp}app_id=${appId}/`)){
-        const rows=await readParquet(f,["install_date","media_source","af_attribution_flag","ad_network_campaign_name","skad_revenue"]);
+        const rows=await readParquet(f,["install_date","media_source","af_attribution_flag","ad_network_campaign_name","ad_network_ad_name","skad_revenue"]);
         for(const r of rows){
           if(String(r.af_attribution_flag).toLowerCase()==="true")continue; // 일반 어트리뷰션과 중복 제외
           const kd=r.install_date?String(r.install_date).slice(0,10):null;
           if(!kd||!inRange(kd))continue;
           const rev=parseFloat(r.skad_revenue)||0; if(rev<=0)continue;
           const media=r.media_source||"unknown";
-          get(media,campCountry(r.ad_network_campaign_name),os,campLabel(r.ad_network_campaign_name,media),kd).skan_rev+=rev;
+          const camp=campLabel(r.ad_network_campaign_name,media);
+          const country=campCountry(r.ad_network_campaign_name);
+          get(media,country,os,camp,kd).skan_rev+=rev;
+          getC(media,country,os,camp,creativeLabel(r.ad_network_ad_name,media),weekLabel(kd)).skan_rev+=rev;
         }
       }
     }
@@ -239,7 +301,7 @@ process.stderr.write("[6] cohort_unified (af_session)\n");
 for(const dt of await dtList("cohort_unified","dt=2026-07-06")){
   for(const appId of APP_IDS){const os=OS_OF[appId];
     for(const f of await listParquet(`${BASE}t=cohort_unified/${dt}/app_id=${appId}/`)){
-      const rows=await readParquet(f,["conversion_date","event_date","event_name","days_post_attribution","media_source","geo","campaign","unique_users"]);
+      const rows=await readParquet(f,["conversion_date","event_date","event_name","days_post_attribution","media_source","geo","campaign","unique_users","af_ad","af_adset"]);
       for(const r of rows){
         if(r.event_name!=="af_session")continue;
         const cd=r.conversion_date?String(r.conversion_date).slice(0,10):null;
@@ -248,13 +310,15 @@ for(const dt of await dtList("cohort_unified","dt=2026-07-06")){
         const media=r.media_source||"organic";
         const country=campCountryStrict(r.campaign)||(r.geo||"??");
         const camp=campLabel(r.campaign,media);
+        const cre=creativeLabel(pickCreativeStd(r,media),media);
         const uu=num(r.unique_users);
         if(cd&&inRange(cd)&&dpa!=null){
           const e=get(media,country,os,camp,cd);
-          if(dpa===1)e.rr1_users+=uu;
-          if(dpa===3)e.rr3_users+=uu;
-          if(dpa===7)e.rr7_users+=uu;
-          if(dpa===30)e.rr30_users+=uu;
+          const ec=getC(media,country,os,camp,cre,weekLabel(cd));
+          if(dpa===1){e.rr1_users+=uu;ec.rr1_users+=uu;}
+          if(dpa===3){e.rr3_users+=uu;ec.rr3_users+=uu;}
+          if(dpa===7){e.rr7_users+=uu;ec.rr7_users+=uu;}
+          if(dpa===30){e.rr30_users+=uu;ec.rr30_users+=uu;}
         }
         // DAU: conversion_date/days_post_attribution 무관하게, 실제 세션이 발생한 캘린더 날짜(ed) 기준으로 합산.
         // 동일 유저는 하루에 하나의 media/country/campaign 조합에만 속하므로 중복 카운트 아님.
@@ -282,7 +346,7 @@ process.stderr.write("[7] sessions (DAU 전체 합계 dedup, 증분 캐시)\n");
 // 캐시는 항상 (국가, KST 날짜) 단위로 유지하고 dt는 "이미 전부 스캔해 캐시에 반영했는지"만 추적한다.
 // 최근 ROLL_N개의 dt는 late-arriving 이벤트에 대비해 매번 무조건 재스캔한다 — 실측 지연 데이터가
 // 없어 근거 기반 값은 아니며, 보수적 기본값으로 필요시 조정 가능.
-const DAU_CACHE_PATH="C:/Users/STZ940/s3tool/dau-session-cache.json";
+const DAU_CACHE_PATH=dataPath("dau-session-cache.json");
 const ROLL_N=3;
 function loadDauCache(){
   const empty={version:1,start:START,processedDt:[],frozenUsers:{}};
@@ -422,8 +486,42 @@ for(const [country,byDate] of Object.entries(DAU_SETS)){
   dauUsers[country]={};
   for(const [date,set] of Object.entries(byDate)) dauUsers[country][date]=[...set];
 }
-writeFileSync("C:/Users/STZ940/s3tool/geo-cohort-os-result.json", JSON.stringify({rows:out,curveByOs,dailyActive,dauUsers},null,2),"utf8");
+// rowsCreative: 소재(creative) 뎁스 추가 + 주차별 버킷(캠페인 시작일 2026-07-07부터 7일 단위) — RC 기반.
+const outCreative=[];
+for(const e of Object.values(RC)){
+  const total=e.ir+e.is;
+  const d1=e.d1_iap+e.d1_iaa, d3=e.d3_iap+e.d3_iaa, d7=e.d7_iap+e.d7_iaa;
+  const d14=e.d14_iap+e.d14_iaa, d21=e.d21_iap+e.d21_iaa, d30=e.d30_iap+e.d30_iaa;
+  outCreative.push({
+    media:e.media,country:e.country,os:e.os,campaign:e.campaign,creative:e.creative,week:e.week,
+    cost:+e.cost.toFixed(2),
+    install_total:total, install_reg:e.ir, install_skan:e.is,
+    cpi: e.cost>0&&total>0?+(e.cost/total).toFixed(2):null,
+    imp:e.imp, clk:e.clk,
+    pur_d1_cnt:e.pur_d1.size, pur_d3_cnt:e.pur_d3.size,
+    rev_d1:+d1.toFixed(2), rev_d3:+d3.toFixed(2), rev_d7:+d7.toFixed(2),
+    rev_d14:+d14.toFixed(2), rev_d21:+d21.toFixed(2), rev_d30:+d30.toFixed(2),
+    rev_d1_iap:+e.d1_iap.toFixed(2), rev_d1_iaa:+e.d1_iaa.toFixed(2),
+    rev_d3_iap:+e.d3_iap.toFixed(2), rev_d3_iaa:+e.d3_iaa.toFixed(2),
+    rev_d7_iap:+e.d7_iap.toFixed(2), rev_d7_iaa:+e.d7_iaa.toFixed(2),
+    rev_d14_iap:+e.d14_iap.toFixed(2), rev_d14_iaa:+e.d14_iaa.toFixed(2),
+    rev_d21_iap:+e.d21_iap.toFixed(2), rev_d21_iaa:+e.d21_iaa.toFixed(2),
+    rev_d30_iap:+e.d30_iap.toFixed(2), rev_d30_iaa:+e.d30_iaa.toFixed(2),
+    skan_rev:+e.skan_rev.toFixed(2),
+    rr_d1_users:e.rr1_users, rr_d3_users:e.rr3_users, rr_d7_users:e.rr7_users, rr_d30_users:e.rr30_users,
+    roas_d1: e.cost>0&&d1>0?+(d1/e.cost*100).toFixed(2):null,
+    roas_d3: e.cost>0&&d3>0?+(d3/e.cost*100).toFixed(2):null,
+    roas_d7: e.cost>0&&d7>0?+(d7/e.cost*100).toFixed(2):null,
+    roas_d14: e.cost>0&&d14>0?+(d14/e.cost*100).toFixed(2):null,
+    roas_d21: e.cost>0&&d21>0?+(d21/e.cost*100).toFixed(2):null,
+    roas_d30: e.cost>0&&d30>0?+(d30/e.cost*100).toFixed(2):null,
+  });
+}
+outCreative.sort((a,b)=>a.week.localeCompare(b.week)||a.media.localeCompare(b.media)||a.os.localeCompare(b.os)||b.cost-a.cost);
+
+writeFileSync(dataPath("geo-cohort-os-result.json"), JSON.stringify({rows:out,curveByOs,dailyActive,dauUsers,rowsCreative:outCreative},null,2),"utf8");
 process.stdout.write(`rows: ${out.length}\n`);
+process.stdout.write(`rowsCreative: ${outCreative.length}\n`);
 // OS 요약
 const byOs={};for(const r of out){if(!byOs[r.os])byOs[r.os]={inst:0,cost:0,imp:0,clk:0,d1:0,d3:0,d7:0,pur1:0,pur3:0};const b=byOs[r.os];b.inst+=r.install_total;b.cost+=r.cost;b.imp+=r.imp;b.clk+=r.clk;b.d1+=r.rev_d1;b.d3+=r.rev_d3;b.d7+=r.rev_d7;b.pur1+=r.pur_d1_cnt;b.pur3+=r.pur_d3_cnt;}
 for(const [o,v] of Object.entries(byOs))process.stdout.write(`  ${o}: inst=${v.inst} cost=$${v.cost.toFixed(0)} imp=${v.imp} clk=${v.clk} D1=$${v.d1.toFixed(0)} D3=$${v.d3.toFixed(0)} D7=$${v.d7.toFixed(0)} pur(D1/D3)=${v.pur1}/${v.pur3}\n`);

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "fs";
-const {rows: ROWS, installs: INSTALLS} = JSON.parse(readFileSync("C:/Users/STZ940/s3tool/format-tree-result.json","utf8"));
+import { dataPath } from "./paths.mjs";
+const {rows: ROWS, installs: INSTALLS} = JSON.parse(readFileSync(dataPath("format-tree-result.json"),"utf8"));
 const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/format-tree.html";
 const dts=[...new Set(ROWS.map(r=>r.date))].sort();
 const RANGE=dts.length?dts[0].replace(/-/g,"/")+" ~ "+dts.at(-1).replace(/-/g,"/"):"";

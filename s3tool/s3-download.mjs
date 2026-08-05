@@ -4,10 +4,11 @@ import { createWriteStream, mkdirSync } from "fs";
 import { pipeline } from "stream/promises";
 import { createGunzip } from "zlib";
 import path from "path";
+import { dataPath } from "./paths.mjs";
 
 
 const prefix = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/t=inapps/";
-const outputDir = "C:\\Users\\STZ940\\s3tool\\data";
+const outputDir = dataPath("data");
 
 mkdirSync(outputDir, { recursive: true });
 

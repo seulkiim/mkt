@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { readFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS=["com.albus.idolharvest","id6756664337"];
 const START="2026-07-07", END="2026-07-19";
@@ -38,7 +39,7 @@ for(const tbl of ["attributed_ad_revenue_v2","organic_ad_revenue_v2","retargetin
   process.stderr.write(`${tbl} done\n`);
 }
 // 설치수는 결과 JSON에서
-const rows=JSON.parse(readFileSync("C:/Users/STZ940/s3tool/geo-cohort-os-result.json","utf8"));
+const rows=JSON.parse(readFileSync(dataPath("geo-cohort-os-result.json"),"utf8"));
 const inst={}; for(const r of rows){const k=gk(r.media,r.country,r.date);inst[k]=(inst[k]||0)+r.install_total;}
 
 const dates=[];for(let t=Date.parse(START+"T00:00:00Z");t<=Date.parse(END+"T00:00:00Z");t+=86400000)dates.push(new Date(t).toISOString().slice(0,10));

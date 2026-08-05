@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "fs";
-const ROWS = JSON.parse(readFileSync("C:/Users/STZ940/s3tool/geo-cohort-os-result.json","utf8"));
+import { dataPath } from "./paths.mjs";
+const ROWS = JSON.parse(readFileSync(dataPath("geo-cohort-os-result.json"),"utf8"));
 const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/geo-cohort-table.html";
 
 const html = `<title>Performance Table — Idol Farm Life · 7/7–7/13 KST</title>

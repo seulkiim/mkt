@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 // 리포트에서 제외할 (campaign, country) 조합(사용자 요청). 캠페인 전체가 아니라, 캠페인명의
 // 지역 타겟(예: "2607_if_kr_ua_ios_install_meta_dl"의 kr=Korea)과 실제 귀속 country_code가
 // 어긋난 오귀속 행만 제외한다 — 예: kr 타겟 캠페인인데 country=US로 잘못 귀속된 설치/매출.
@@ -11,7 +12,7 @@ const EXCLUDED_CAMPAIGN_COUNTRY = new Set([
 const EXCLUDED_CAMPAIGNS_FULL = new Set([
   "{CAMPAIGN_NAME}",
 ]);
-const RESULT_DATA = JSON.parse(readFileSync("C:/Users/STZ940/s3tool/geo-cohort-os-result.json","utf8"));
+const RESULT_DATA = JSON.parse(readFileSync(dataPath("geo-cohort-os-result.json"),"utf8"));
 const ROWS = RESULT_DATA.rows
   .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
 // D21/D30 예측(사용자 요청)용 — 국가/캠페인 합산(pooled) 일자별 코호트 나이(day) 매출 곡선. 국가 필터와 무관.
@@ -21,6 +22,10 @@ const DAILY_ACTIVE = (RESULT_DATA.dailyActive||[])
   .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
 // "전체 합계" DAU 전용 dedup 유저 ID(국가별·날짜별) — 세그먼트/캠페인 분해가 없으므로 별도 제외 필터 불필요.
 const DAU_USERS = RESULT_DATA.dauUsers || {};
+// 소재(creative) 뎁스 + 주차별 버킷(사용자 요청) — ROWS(일자별, 소재 없음)와 완전히 별개의 데이터셋.
+// campaign/country 제외 필터는 ROWS와 동일하게 적용.
+const ROWS_CREATIVE = (RESULT_DATA.rowsCreative||[])
+  .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
 const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/geo-cohort-table.html";
 
 const _dates=[...new Set(ROWS.map(r=>r.date))].sort();
@@ -540,6 +545,18 @@ td.left,th.left{text-align:left;}
 .po-pill{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
 .po-paid{background:rgba(78,158,255,.16);color:#9ecbff;}
 .po-organic{background:rgba(125,133,144,.16);color:#b0b6bd;}
+.ctype-pill{display:inline-block;font-size:10px;padding:1px 8px;border-radius:10px;border:1px solid var(--border2);font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
+.topspend-hint{font-size:11.5px;color:var(--muted);background:var(--surf);border:1px dashed var(--border2);border-radius:6px;padding:10px 12px;margin-bottom:14px;}
+.topspend-head{font-size:13px;font-weight:800;margin-bottom:8px;color:var(--txt);}
+.topspend-week{font-size:11px;font-weight:500;color:var(--muted);}
+.topspend-wrap{overflow-x:auto;border:2px solid var(--accent);border-radius:8px;margin-bottom:16px;box-shadow:0 0 0 4px rgba(78,158,255,.08);}
+.topspend-tbl{border-collapse:collapse;width:100%;font-size:12px;}
+.topspend-tbl th,.topspend-tbl td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.topspend-tbl td.left,.topspend-tbl th.left{text-align:left;}
+.topspend-tbl thead th{background:rgba(78,158,255,.14);color:var(--accent);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.03em;}
+.topspend-tbl tbody tr:hover{background:var(--surf2);}
+.topspend-tbl tbody tr:nth-child(1) td.topspend-cost{color:#ffd166;}
+.topspend-cost{font-weight:800;color:var(--txt);}
 .lvl0{font-weight:700;}
 .lvl0 td{background:rgba(78,158,255,.06);}
 .lvl1 td{background:rgba(255,255,255,.015);}
@@ -642,6 +659,7 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
 <div class="tabbar">
   <button class="tabbtn active" id="tabbtn-summary" onclick="showTab('summary')">Summary</button>
   <button class="tabbtn" id="tabbtn-table" onclick="showTab('table')">Data Table</button>
+  <button class="tabbtn" id="tabbtn-creative" onclick="showTab('creative')">Data Table (소재·주차)</button>
   <button class="tabbtn" id="tabbtn-cohort" onclick="showTab('cohort')">Cohort Trend</button>
 </div>
 <div class="main">
@@ -710,6 +728,42 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       </div>
     </div>
     <div class="tw"><table id="tbl"></table></div>
+  </div>
+  <div id="tab-creative" class="tabpanel">
+    <div class="note">
+      <div class="note-head">Remark</div>
+      <p>캠페인 하위에 <b>소재(creative)</b>까지 분해한 뷰입니다. 조합 수가 많아지는 것을 감안해, 설치일 대신 캠페인 시작일(2026-07-07)부터 7일 단위로 묶은 <b>주차</b> 기준으로 집계합니다(Day-N 코호트 판정은 실제 설치일 기준으로 계산한 뒤 주차 버킷에 합산 — 정확도 손실 없음).</p>
+      <p>DAU/Active REV는 이 뷰에서는 제공하지 않습니다(다른 탭과 동일한 계산을 소재 단위까지 늘리면 데이터량이 지나치게 커짐).</p>
+      <p>그 외 지표 정의는 Data Table 탭과 동일합니다. 마지막 주차는 아직 7일이 다 지나지 않은 진행 중 구간일 수 있습니다.</p>
+      <p><b>소재유형</b>: 소재명에 포함된 core/char/fake/etc/help 태그로 자동 분류한 그룹입니다. 이 태그도 세그먼트 계층에 넣어 드래그로 순서를 바꿀 수 있습니다.</p>
+    </div>
+    <div class="segwrap">
+      <div class="segbar" id="segbar2"></div>
+      <span class="seglabel">세그먼트 계층 (드래그하거나 ◀▶로 순서 변경)</span>
+    </div>
+    <div class="bar">
+      <div class="barsec">
+        <span class="barsec-label">필터</span>
+        <div class="dd" id="weekDD2">
+          <button class="btn ddbtn" onclick="toggleWeekDD2(event)">주차 필터 <span id="wdcount2"></span> ▾</button>
+          <div class="ddpanel" id="wdpanel2"></div>
+        </div>
+        <div class="dd" id="countryDD2">
+          <button class="btn ddbtn" onclick="toggleCountryDD2(event)">국가 필터 <span id="ccount2"></span> ▾</button>
+          <div class="ddpanel" id="cddpanel2"></div>
+        </div>
+      </div>
+      <div class="bar-divider"></div>
+      <div class="barsec">
+        <span class="barsec-label">보기</span>
+        <button class="btn" id="revGroupBtn2" onclick="toggleGroup2('rev')"></button>
+        <button class="btn" id="rrGroupBtn2" onclick="toggleGroup2('rr')"></button>
+        <button class="btn" onclick="expandAll2()">모두 펼치기</button>
+        <button class="btn" onclick="collapseAll2()">모두 접기</button>
+      </div>
+    </div>
+    <div id="topSpenders2"></div>
+    <div class="tw"><table id="tbl2"></table></div>
   </div>
   <div id="tab-cohort" class="tabpanel">
     ${COHORT_RANGE_NOTE}
@@ -785,6 +839,48 @@ for(const r of RAW) r.paid_org = r.media==="organic" ? "organic" : "paid";
 const DAILY_ACTIVE_ALL = ${JSON.stringify(DAILY_ACTIVE)};
 for(const r of DAILY_ACTIVE_ALL) r.paid_org = r.media==="organic" ? "organic" : "paid";
 const DAILY_ACTIVE_RAW = DAILY_ACTIVE_ALL.filter(r=>!UNKNOWN.includes(r.country));
+// 소재(creative)·주차별 뎁스 데이터셋 — RAW와 완전히 별개(Data Table(소재) 탭 전용).
+const RAW2_ALL = ${JSON.stringify(ROWS_CREATIVE)};
+const RAW2 = RAW2_ALL.filter(r=>!UNKNOWN.includes(r.country));
+for(const r of RAW2) r.paid_org = r.media==="organic" ? "organic" : "paid";
+// 소재 규격(사이즈) 병합(사용자 요청, 전체 매체 공통): 소재명 뒤에 붙는 "_1920x1080"류 배치
+// 사이즈 표기만 다르고 나머지 이름이 완전히 같은 소재들은 같은 소재의 사이즈 변형일 뿐이므로
+// 사이즈 표기를 제거해 하나의 소재로 합친다(뒤에 파일 확장자가 붙은 경우도 함께 제거,
+// 예: "..._720x720.jpg" → "..."). 트리/Top Spender는 소재명으로 groupby해 합산하므로,
+// 여기서 이름만 통일하면 나머지 합산은 자동으로 처리된다.
+function stripCreativeSize(name){
+  return String(name).replace(/_\d{2,5}x\d{2,5}(\.\w+)?(?=_|$)/gi,"");
+}
+for(const r of RAW2) r.creative=stripCreativeSize(r.creative);
+// 소재명 정리(사용자 요청, Applovin 전용): "if_video_playable"/"video_playable"(if_ 유무 두 표기
+// 모두 존재)은 이름만으로는 유형을 알 수 없어 core임을 명시해 하나로 합치고, Applovin 소재명
+// 전체에서 "if_" 접두사는 제거한다(사용자 요청).
+for(const r of RAW2){
+  if(r.media!=="applovin_int")continue;
+  if(r.creative==="if_video_playable"||r.creative==="video_playable") r.creative="video_playable(core)";
+  else if(r.creative.startsWith("if_")) r.creative=r.creative.slice(3);
+}
+// 소재유형(사용자 요청): 소재명에 포함된 core/char/fake/etc/help 태그로 그룹핑.
+// 명명 규칙상 대부분 "..._<네트워크>_<4~6자리 시퀀스번호>_<유형태그>_<테마명>..." 형태라, 시퀀스번호
+// 바로 다음 토큰을 유형으로 뽑는 게 가장 정확하다 — 그냥 문자열 전체에서 "fake"를 찾으면
+// 예: "if_en_liftoff_26002_core_fakeupgrade(factory)_..."처럼 실제 태그는 core인데 테마명
+// "fakeupgrade"에 "fake"가 포함되어 있어 잘못 분류될 수 있다. 시퀀스번호 토큰이 없는 짧은/테스트용
+// 소재명(예: "fake1", "if_core", "core")은 문자열 포함 여부로 폴백 판정한다.
+const CTYPE_TAGS=["core","char","fake","etc","help"];
+function creativeType(cre){
+  if(cre==="(organic)"||cre==="(no creative)")return cre;
+  const parts=String(cre).split("_");
+  const si=parts.findIndex(p=>/^[0-9]{4,6}$/.test(p));
+  if(si>=0 && parts[si+1]){
+    const t=parts[si+1].toLowerCase();
+    if(CTYPE_TAGS.includes(t))return t;
+  }
+  const low=String(cre).toLowerCase();
+  for(const t of CTYPE_TAGS)if(low.includes(t))return t;
+  return "기타";
+}
+for(const r of RAW2) r.creative_type = creativeType(r.creative);
+const CTYPE_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","기타":"var(--dim)"};
 // "전체 합계" DAU 전용: 국가별·날짜별 dedup 유저 ID(정수). 세그먼트 트리 노드의 DAU(위 DAILY_ACTIVE_RAW
 // 기반, 여러 날짜 단순 합산)와는 별개로, 전체 합계 행만 이 데이터로 "기간 내 실제 순수 유저 수"를 계산한다.
 const DAU_USERS = ${JSON.stringify(DAU_USERS)};
@@ -858,6 +954,11 @@ const METRICS=[
   {k:"cpc",label:"CPC",type:"$",hg:"yellow"},
   {k:"cvr",label:"CVR<br>(clk→inst)",type:"%",hg:"yellow"},
 ];
+// ══ Data Table(소재별) 탭 — RAW2(소재+주차) 전용 차원/지표 메타. DAU/Active REV는 이 데이터셋에
+// 없으므로(캘린더일 기준 집계를 별도로 만들지 않음) METRICS에서 그 두 항목만 제외한 목록을 쓴다.
+const DIM_META2={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},creative:{label:"소재"},creative_type:{label:"소재유형"},week:{label:"주차"}};
+let LEVELS2=["country","paid_org","media","week","campaign","creative_type","creative","os"];
+const METRICS2=METRICS.filter(m=>m.k!=="dau"&&m.k!=="active_rev");
 function blank(){return {cost:0,install_total:0,install_reg:0,install_skan:0,imp:0,clk:0,pur_d1_cnt:0,pur_d3_cnt:0,rev_d1:0,rev_d3:0,rev_d7:0,rev_d1_iap:0,rev_d1_iaa:0,rev_d3_iap:0,rev_d3_iaa:0,rev_d7_iap:0,rev_d7_iaa:0,rev_d14:0,rev_d14_iap:0,rev_d14_iaa:0,rev_d21:0,rev_d21_iap:0,rev_d21_iaa:0,rev_d30:0,rev_d30_iap:0,rev_d30_iaa:0,skan_rev:0,rr_d1_users:0,rr_d3_users:0,rr_d7_users:0,rr_d30_users:0};}
 function addInto(a,r){a.cost+=r.cost;a.install_total+=r.install_total;a.install_reg+=r.install_reg;a.install_skan+=r.install_skan;a.imp+=(r.imp||0);a.clk+=(r.clk||0);a.pur_d1_cnt+=(r.pur_d1_cnt||0);a.pur_d3_cnt+=(r.pur_d3_cnt||0);a.rev_d1+=r.rev_d1;a.rev_d3+=r.rev_d3;a.rev_d7+=(r.rev_d7||0);a.rev_d1_iap+=r.rev_d1_iap;a.rev_d1_iaa+=r.rev_d1_iaa;a.rev_d3_iap+=r.rev_d3_iap;a.rev_d3_iaa+=r.rev_d3_iaa;a.rev_d7_iap+=(r.rev_d7_iap||0);a.rev_d7_iaa+=(r.rev_d7_iaa||0);a.rev_d14+=(r.rev_d14||0);a.rev_d14_iap+=(r.rev_d14_iap||0);a.rev_d14_iaa+=(r.rev_d14_iaa||0);a.rev_d21+=(r.rev_d21||0);a.rev_d21_iap+=(r.rev_d21_iap||0);a.rev_d21_iaa+=(r.rev_d21_iaa||0);a.rev_d30+=(r.rev_d30||0);a.rev_d30_iap+=(r.rev_d30_iap||0);a.rev_d30_iaa+=(r.rev_d30_iaa||0);a.skan_rev+=(r.skan_rev||0);a.rr_d1_users+=(r.rr_d1_users||0);a.rr_d3_users+=(r.rr_d3_users||0);a.rr_d7_users+=(r.rr_d7_users||0);a.rr_d30_users+=(r.rr_d30_users||0);}
 function derive(a){
@@ -1303,6 +1404,261 @@ function segDrop(e){
 }
 function segReordered(){expanded.clear();renderSegBar();rebuild();}
 
+// ══════════════════════════════════════════════════════════════════════════
+// Data Table(소재·주차) 탭 — RAW2 전용. blank()/addInto()/derive()/fmt()/roasCls()/esc()/
+// countryLabel()/MLABEL/MCOLOR는 Data Table 탭과 동일한 필드명을 쓰므로 그대로 재사용한다.
+// ══════════════════════════════════════════════════════════════════════════
+const COUNTRY_OPTIONS2=[...new Set(RAW2.map(r=>r.country))].sort();
+const selectedCountries2=new Set(COUNTRY_OPTIONS2);
+let countrySearch2="";
+// 주차 필터(사용자 요청) — week 라벨은 "MM-DD~MM-DD" 형태라 문자열 오름차순 정렬이 곧 시간 순서.
+const WEEK_OPTIONS2=[...new Set(RAW2.map(r=>r.week))].sort();
+const selectedWeeks2=new Set(WEEK_OPTIONS2);
+function updateWCount2(){document.getElementById("wdcount2").textContent=selectedWeeks2.size===WEEK_OPTIONS2.length?"(전체)":"("+selectedWeeks2.size+")";}
+function renderWeekChips2(){
+  updateWCount2();
+  const items=WEEK_OPTIONS2.map(w=>{
+    const on=selectedWeeks2.has(w);
+    return \`<label class="ddi"><input type="checkbox" \${on?'checked':''} onchange="toggleWeek2('\${w}')">\${esc(w)}</label>\`;
+  }).join("");
+  document.getElementById("wdpanel2").innerHTML=
+    '<div class="ddhead"><button onclick="allWeeks2(true)">전체선택</button><button onclick="allWeeks2(false)">전체해제</button></div>'+
+    '<div class="ddgrid">'+items+'</div>';
+}
+function toggleWeek2(w){selectedWeeks2.has(w)?selectedWeeks2.delete(w):selectedWeeks2.add(w);expanded2.clear();renderWeekChips2();rebuild2();}
+function allWeeks2(on){selectedWeeks2.clear();if(on)WEEK_OPTIONS2.forEach(w=>selectedWeeks2.add(w));expanded2.clear();renderWeekChips2();rebuild2();}
+function toggleWeekDD2(e){e.stopPropagation();document.getElementById("wdpanel2").classList.toggle("open");}
+document.addEventListener("click",e=>{if(!document.getElementById("weekDD2").contains(e.target))document.getElementById("wdpanel2").classList.remove("open");});
+const collapsedGroups2=new Set(["d1","d3","d7","d14","d21","d30","rev"]);
+function visibleMetrics2(){return METRICS2.filter(m=>!(m.grp&&collapsedGroups2.has(m.grp)));}
+function toggleGroup2(g){collapsedGroups2.has(g)?collapsedGroups2.delete(g):collapsedGroups2.add(g);render2();}
+// 자식 서브트리 전체의 depth를 delta만큼 옮긴다(뎁스 중복 병합 시, 건너뛴 한 뎁스만큼
+// 들여쓰기/lvl 클래스를 다시 맞추기 위함).
+function shiftDepth2(nodes,delta){
+  if(!nodes)return nodes;
+  for(const n of nodes){ n.depth+=delta; shiftDepth2(n.children,delta); }
+  return nodes;
+}
+let idc2=0;
+function build2(rows,depth){
+  if(depth>=LEVELS2.length)return null;
+  const key=LEVELS2[depth];
+  const nextKey=LEVELS2[depth+1];
+  const groups={};
+  for(const r of rows){(groups[r[key]]=groups[r[key]]||[]).push(r);}
+  const nodes=[];
+  for(const [val,rs] of Object.entries(groups)){
+    const agg=blank();for(const r of rs)addInto(agg,r);derive(agg);
+    let children=build2(rs,depth+1);
+    // 소재유형↔소재 뎁스 중복 병합(사용자 요청): 소재유형이 "core"인 그룹의 소재가 딱 하나뿐이고
+    // 그 값도 "core"처럼 부모와 완전히 같으면, 똑같은 라벨을 한 번 더 클릭해야 해서 헷갈린다.
+    // 이런 경우 그 소재 뎁스를 건너뛰고 그 자식들을 바로 이 노드 밑에 이어붙인다(칩을 드래그해
+    // 순서를 바꿔 소재→소재유형 순서가 되어도 반대 방향으로 동일하게 동작).
+    const isTypeCreativePair=(key==="creative_type"&&nextKey==="creative")||(key==="creative"&&nextKey==="creative_type");
+    if(isTypeCreativePair && children && children.length===1 && String(children[0].value).toLowerCase()===String(val).toLowerCase()){
+      children=shiftDepth2(children[0].children,-1);
+    }
+    const node={id:++idc2,dim:key,value:val,depth,...agg,children};
+    nodes.push(node);
+  }
+  if(key==="week")nodes.sort((a,b)=>String(a.value).localeCompare(String(b.value))); // 오름차순
+  else nodes.sort((a,b)=>b.cost-a.cost || b.install_total-a.install_total);
+  return nodes;
+}
+let TREE2=[];
+function rebuild2(){
+  idc2=0;
+  TREE2=build2(RAW2.filter(r=>selectedCountries2.has(r.country)&&selectedWeeks2.has(r.week)),0);
+  render2();
+  renderTopSpenders2();
+}
+const expanded2=new Set();
+function dimLabel2(node){
+  const v=node.value;
+  if(node.dim==="paid_org")return \`<span class="po-pill po-\${esc(v)}">\${esc(v)}</span>\`;
+  if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--organic)'}"></span>\${esc(MLABEL[v]||v)}\`;
+  if(node.dim==="os")return \`<span class="os-pill os-\${esc(v)}">\${esc(v)}</span>\`;
+  if(node.dim==="creative_type")return \`<span class="ctype-pill" style="border-color:\${CTYPE_COLOR[v]||'var(--border2)'};color:\${CTYPE_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
+  if(node.dim==="week")return esc(v);
+  if(node.dim==="campaign"||node.dim==="creative")return \`<span class="camp" title="\${esc(v)}">\${esc(v)}</span>\`;
+  return countryLabel(v);
+}
+function renderNodes2(nodes,rowsArr,metrics){
+  for(const n of nodes){
+    const hasKids=n.children&&n.children.length;
+    const open=expanded2.has(n.id);
+    let tds=\`<td class="left node \${hasKids?'':'leaf'} lvl\${n.depth}" style="padding-left:\${10+n.depth*20}px" \${hasKids?\`onclick="toggle2(\${n.id})"\`:''}>\`;
+    tds+=\`<span class="caret" style="transform:rotate(\${open?90:0}deg)">\${hasKids?'▶':''}</span>\${dimLabel2(n)}</td>\`;
+    for(const m of metrics){
+      const cls=m.k.startsWith("roas")?roasCls(n[m.k]):"";
+      tds+=\`<td class="\${cls} lvl\${n.depth}">\${fmt(n[m.k],m.type)}</td>\`;
+    }
+    rowsArr.push(\`<tr>\${tds}</tr>\`);
+    if(hasKids&&open)renderNodes2(n.children,rowsArr,metrics);
+  }
+}
+const GROUP_BUTTONS2=[{id:"revGroupBtn2",grp:"rev",label:"매출 지표"},{id:"rrGroupBtn2",grp:"rr",label:"RR 지표"}];
+function updateGroupBtn2(){
+  for(const g of GROUP_BUTTONS2){
+    const count=METRICS2.filter(m=>m.grp===g.grp).length;
+    const collapsed=collapsedGroups2.has(g.grp);
+    document.getElementById(g.id).textContent=collapsed?\`\${g.label} 펼치기 (\${count})\`:\`\${g.label} 접기\`;
+  }
+}
+function render2(){
+  const total=blank();for(const r of RAW2)if(selectedCountries2.has(r.country)&&selectedWeeks2.has(r.week))addInto(total,r);derive(total);
+  const vis=visibleMetrics2();
+  let h='<thead><tr><th class="left">구분</th>'+vis.map(m=>{
+    const cls=m.hg?'th-'+m.hg:'';
+    if(m.ctrlGrp){
+      const open=!collapsedGroups2.has(m.ctrlGrp);
+      return \`<th class="\${cls} th-toggle-parent" onclick="toggleGroup2('\${m.ctrlGrp}')"><span class="th-caret" style="transform:rotate(\${open?90:0}deg)">▶</span>\${m.label}</th>\`;
+    }
+    return \`<th class="\${cls}">\${m.label}</th>\`;
+  }).join("")+'</tr></thead><tbody>';
+  h+='<tr class="grand-total"><td class="left">전체 합계</td>';
+  for(const m of vis)h+=\`<td>\${fmt(total[m.k],m.type)}</td>\`;
+  h+='</tr>';
+  const arr=[];renderNodes2(TREE2,arr,vis);h+=arr.join("");
+  h+='</tbody>';
+  updateGroupBtn2();
+  const tbl=document.getElementById("tbl2");
+  tbl.innerHTML=h;
+  const headTr=tbl.querySelector("thead tr");
+  if(headTr) tbl.style.setProperty("--head-h", headTr.getBoundingClientRect().height+"px");
+}
+// ══ Top Spender 소재 패널(사용자 요청) — 주차를 특정 구간으로 좁혔을 때만, 매체×캠페인별로
+// Cost가 가장 높았던 소재 1개씩을 뽑아 상단에 강조 표시한다(전체 주차 선택 시에는 의미가
+// 옅어지고 캠페인 수만큼 행이 늘어나 숨김). share%는 그 소재의 Cost가 같은 매체×캠페인
+// 전체 Cost 중 얼마를 차지하는지(해당 소재로의 예산 집중도)를 보여준다.
+function computeTopSpenders2(rows){
+  const groupCost={}, cell={};
+  for(const r of rows){
+    const gk=r.media+"|||"+r.campaign;
+    groupCost[gk]=(groupCost[gk]||0)+r.cost;
+    const ck=gk+"|||"+r.creative;
+    if(!cell[ck])cell[ck]={media:r.media,campaign:r.campaign,creative:r.creative,creative_type:r.creative_type,cost:0,install_total:0,rev_d1:0,rev_d3:0,rev_d7:0,imp:0,clk:0};
+    const b=cell[ck];
+    b.cost+=r.cost; b.install_total+=r.install_total; b.rev_d1+=r.rev_d1; b.rev_d3+=(r.rev_d3||0); b.rev_d7+=(r.rev_d7||0);
+    b.imp+=(r.imp||0); b.clk+=(r.clk||0);
+  }
+  const top={};
+  for(const b of Object.values(cell)){
+    const gk=b.media+"|||"+b.campaign;
+    if(!top[gk]||b.cost>top[gk].cost)top[gk]=b;
+  }
+  return Object.values(top).filter(b=>b.cost>0).map(b=>{
+    const gk=b.media+"|||"+b.campaign, gCost=groupCost[gk]||0;
+    return {...b,
+      group_cost:gCost, share:gCost>0?b.cost/gCost*100:null,
+      cpi:b.install_total>0?b.cost/b.install_total:null,
+      roas_d1:b.cost>0&&b.rev_d1>0?b.rev_d1/b.cost*100:null,
+      roas_d7:b.cost>0&&b.rev_d7>0?b.rev_d7/b.cost*100:null,
+      cpm:b.imp>0?b.cost/b.imp*1000:null,
+      ctr:b.imp>0?b.clk/b.imp*100:null,
+      cpc:b.clk>0?b.cost/b.clk:null,
+      cvr:b.clk>0?b.install_total/b.clk*100:null,
+    };
+  }).sort((a,b)=>b.cost-a.cost);
+}
+function renderTopSpenders2(){
+  const el=document.getElementById("topSpenders2");
+  const narrowed=selectedWeeks2.size<WEEK_OPTIONS2.length;
+  if(!narrowed){
+    el.innerHTML='<div class="topspend-hint">주차 필터에서 특정 주차를 선택하면, 매체×캠페인별 Cost 소진이 가장 높았던 소재를 여기에 정리해서 보여드립니다.</div>';
+    return;
+  }
+  const rows=RAW2.filter(r=>selectedCountries2.has(r.country)&&selectedWeeks2.has(r.week));
+  const top=computeTopSpenders2(rows);
+  if(!top.length){ el.innerHTML='<div class="topspend-hint">선택한 주차·국가 범위에 표시할 데이터가 없습니다.</div>'; return; }
+  const weekTxt=[...selectedWeeks2].sort().join(", ");
+  let h=\`<div class="topspend-head">🏆 매체×캠페인별 Top Spender 소재 <span class="topspend-week">(선택 주차: \${esc(weekTxt)})</span></div>\`;
+  h+='<div class="topspend-wrap"><table class="topspend-tbl"><thead><tr>'+
+     '<th class="left">매체</th><th class="left">캠페인</th><th class="left">Top 소재</th><th>유형</th>'+
+     '<th>Cost</th><th>캠페인 내 비중</th><th>Install</th><th>CPI</th><th>D1 ROAS</th><th>D7 ROAS</th>'+
+     '<th>Imp</th><th>CPM</th><th>CTR</th><th>CPC</th><th>CVR</th>'+
+     '</tr></thead><tbody>';
+  for(const b of top){
+    h+=\`<tr>
+      <td class="left"><span class="dot" style="background:\${MCOLOR[b.media]||'var(--organic)'}"></span>\${esc(MLABEL[b.media]||b.media)}</td>
+      <td class="left"><span class="camp" title="\${esc(b.campaign)}">\${esc(b.campaign)}</span></td>
+      <td class="left"><span class="camp" title="\${esc(b.creative)}">\${esc(b.creative)}</span></td>
+      <td><span class="ctype-pill" style="border-color:\${CTYPE_COLOR[b.creative_type]||'var(--border2)'};color:\${CTYPE_COLOR[b.creative_type]||'var(--txt)'}">\${esc(b.creative_type)}</span></td>
+      <td class="topspend-cost">\${fmt(b.cost,"$")}</td>
+      <td>\${fmt(b.share,"%")}</td>
+      <td>\${fmt(b.install_total,"n")}</td>
+      <td>\${fmt(b.cpi,"$")}</td>
+      <td class="\${roasCls(b.roas_d1)}">\${fmt(b.roas_d1,"%")}</td>
+      <td class="\${roasCls(b.roas_d7)}">\${fmt(b.roas_d7,"%")}</td>
+      <td>\${fmt(b.imp,"n")}</td>
+      <td>\${fmt(b.cpm,"$")}</td>
+      <td>\${fmt(b.ctr,"%")}</td>
+      <td>\${fmt(b.cpc,"$")}</td>
+      <td>\${fmt(b.cvr,"%")}</td>
+    </tr>\`;
+  }
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+}
+function toggle2(id){expanded2.has(id)?expanded2.delete(id):expanded2.add(id);render2();}
+function allIds2(nodes,acc){for(const n of nodes){if(n.children&&n.children.length){acc.push(n.id);allIds2(n.children,acc);}}return acc;}
+function expandAll2(){allIds2(TREE2,[]).forEach(id=>expanded2.add(id));render2();}
+function collapseAll2(){expanded2.clear();render2();}
+
+function updateCCount2(){document.getElementById("ccount2").textContent=selectedCountries2.size===COUNTRY_OPTIONS2.length?"(전체)":"("+selectedCountries2.size+")";}
+function renderCountryGrid2(){
+  const q=countrySearch2.trim().toLowerCase();
+  const filtered=q?COUNTRY_OPTIONS2.filter(c=>c.toLowerCase().includes(q)):COUNTRY_OPTIONS2;
+  document.getElementById("cgrid2").innerHTML=filtered.length?filtered.map(c=>{
+    const on=selectedCountries2.has(c);
+    return \`<label class="ddi"><input type="checkbox" \${on?'checked':''} onchange="toggleCountry2('\${c}')">\${countryLabel(c)}</label>\`;
+  }).join(""):'<div class="ddempty">검색 결과 없음</div>';
+}
+function renderCountryPanel2(){
+  document.getElementById("cddpanel2").innerHTML=
+    '<div class="ddhead"><button onclick="allCountries2(true)">전체선택</button><button onclick="allCountries2(false)">전체해제</button></div>'+
+    '<input class="ddsearch" type="text" placeholder="국가 코드 검색 (예: US, KR)" oninput="onCountrySearch2(event)">'+
+    '<div class="ddgrid" id="cgrid2"></div>';
+  updateCCount2();renderCountryGrid2();
+}
+function onCountrySearch2(e){countrySearch2=e.target.value;renderCountryGrid2();}
+function toggleCountry2(c){selectedCountries2.has(c)?selectedCountries2.delete(c):selectedCountries2.add(c);updateCCount2();expanded2.clear();rebuild2();}
+function allCountries2(on){selectedCountries2.clear();if(on)COUNTRY_OPTIONS2.forEach(c=>selectedCountries2.add(c));updateCCount2();renderCountryGrid2();expanded2.clear();rebuild2();}
+function toggleCountryDD2(e){e.stopPropagation();document.getElementById("cddpanel2").classList.toggle("open");}
+document.addEventListener("click",e=>{if(!document.getElementById("countryDD2").contains(e.target))document.getElementById("cddpanel2").classList.remove("open");});
+
+let dragKey2=null;
+function renderSegBar2(){
+  const el=document.getElementById("segbar2");
+  el.innerHTML=LEVELS2.map((k,i)=>\`<div class="chip" draggable="true" data-k="\${k}"
+      ondragstart="segDragStart2(event)" ondragover="segDragOver2(event)" ondragleave="segDragLeave2(event)" ondrop="segDrop2(event)" ondragend="segDragEnd2(event)">
+    <span class="chip-num">\${i+1}</span><span class="chip-label">\${DIM_META2[k].label}</span>
+    <span class="chip-btns">
+      <button class="chip-btn" \${i===0?'disabled':''} onclick="moveSeg2('\${k}',-1)" title="앞으로">◀</button>
+      <button class="chip-btn" \${i===LEVELS2.length-1?'disabled':''} onclick="moveSeg2('\${k}',1)" title="뒤로">▶</button>
+    </span>
+  </div>\`).join("");
+}
+function moveSeg2(k,dir){
+  const i=LEVELS2.indexOf(k), j=i+dir; if(j<0||j>=LEVELS2.length)return;
+  [LEVELS2[i],LEVELS2[j]]=[LEVELS2[j],LEVELS2[i]];
+  segReordered2();
+}
+function segDragStart2(e){dragKey2=e.currentTarget.dataset.k;e.currentTarget.classList.add("dragging");e.dataTransfer.effectAllowed="move";}
+function segDragOver2(e){e.preventDefault();e.dataTransfer.dropEffect="move";e.currentTarget.classList.add("over");}
+function segDragLeave2(e){e.currentTarget.classList.remove("over");}
+function segDragEnd2(e){e.currentTarget.classList.remove("dragging");document.querySelectorAll(".chip.over").forEach(c=>c.classList.remove("over"));}
+function segDrop2(e){
+  e.preventDefault();
+  const tgt=e.currentTarget.dataset.k; e.currentTarget.classList.remove("over");
+  if(!dragKey2||dragKey2===tgt)return;
+  const from=LEVELS2.indexOf(dragKey2), to=LEVELS2.indexOf(tgt);
+  LEVELS2.splice(from,1); LEVELS2.splice(to,0,dragKey2);
+  dragKey2=null;
+  segReordered2();
+}
+function segReordered2(){expanded2.clear();renderSegBar2();rebuild2();}
+
 function showTab(name){
   document.querySelectorAll(".tabpanel").forEach(el=>el.classList.remove("active"));
   document.querySelectorAll(".tabbtn").forEach(el=>el.classList.remove("active"));
@@ -1311,9 +1667,11 @@ function showTab(name){
   // Data Table 탭은 기본적으로 숨겨져 있어 초기 렌더 시 헤더 높이 측정(--head-h)이 0으로 잡힐 수 있음
   // — 탭이 실제로 보이게 된 시점에 다시 그려서 전체 합계 행의 sticky 오프셋을 바로잡는다.
   if(name==="table")render();
+  if(name==="creative")render2();
 }
 renderSegBar();renderChips();renderCountryPanel();rebuild();
 renderSumChips();renderSumCountryPanel();renderSummary();
+renderSegBar2();renderCountryPanel2();renderWeekChips2();rebuild2();
 </script>`;
 writeFileSync(OUT, html, "utf8");
 process.stdout.write("written len="+html.length+"\\n");

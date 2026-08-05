@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS = ["com.albus.idolharvest", "id6756664337"];
@@ -201,7 +202,7 @@ const result = {
   generatedAt: new Date().toISOString()
 };
 
-writeFileSync("C:/Users/STZ940/s3tool/cohort-full-result.json", JSON.stringify(result, null, 2), "utf8");
+writeFileSync(dataPath("cohort-full-result.json"), JSON.stringify(result, null, 2), "utf8");
 process.stderr.write("\nDone! Saved to cohort-full-result.json\n");
 
 // Quick summary

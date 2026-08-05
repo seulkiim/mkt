@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "fs";
-const data = JSON.parse(readFileSync("C:/Users/STZ940/s3tool/geo-cohort-result.json","utf8"));
+import { dataPath } from "./paths.mjs";
+const data = JSON.parse(readFileSync(dataPath("geo-cohort-result.json"),"utf8"));
 
 const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/geo-cohort-report.html";
 

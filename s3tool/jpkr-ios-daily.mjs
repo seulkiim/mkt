@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
-const d = JSON.parse(readFileSync("./geo-cohort-os-result.json", "utf8"));
+import { dataPath } from "./paths.mjs";
+const d = JSON.parse(readFileSync(dataPath("geo-cohort-os-result.json"), "utf8"));
 const rows = d.rows.filter(r => (r.country === "JP" || r.country === "KR") && r.os === "iOS");
 
 const byDateCountry = {};

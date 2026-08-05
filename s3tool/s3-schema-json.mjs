@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata } from "hyparquet";
 import { writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 
@@ -65,6 +66,6 @@ for (const tbl of tables) {
   });
 }
 
-writeFileSync("C:/Users/STZ940/s3tool/schema-result.json", JSON.stringify(result, null, 2), "utf8");
+writeFileSync(dataPath("schema-result.json"), JSON.stringify(result, null, 2), "utf8");
 process.stderr.write(`\nDone: ${result.length} tables\n`);
 console.log(JSON.stringify(result));

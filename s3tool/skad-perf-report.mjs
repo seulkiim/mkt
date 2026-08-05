@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
+import { dataPath } from "./paths.mjs";
 
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS = ["com.albus.idolharvest", "id6756664337"];
@@ -291,7 +292,7 @@ for (const [, e] of Object.entries(data)) {
 
 result.sort((a,b)=> a.date.localeCompare(b.date) || a.media.localeCompare(b.media));
 
-writeFileSync("C:/Users/STZ940/s3tool/skad-perf-result.json", JSON.stringify(result, null, 2), "utf8");
+writeFileSync(dataPath("skad-perf-result.json"), JSON.stringify(result, null, 2), "utf8");
 process.stderr.write("\nDone! → skad-perf-result.json\n");
 
 // quick print
