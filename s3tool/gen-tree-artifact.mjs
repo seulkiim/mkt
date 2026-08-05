@@ -736,8 +736,10 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       <p>캠페인 하위에 <b>소재(creative)</b>까지 분해한 뷰입니다. 조합 수가 많아지는 것을 감안해, 설치일 대신 캠페인 시작일(2026-07-07)부터 7일 단위로 묶은 <b>주차</b> 기준으로 집계합니다(Day-N 코호트 판정은 실제 설치일 기준으로 계산한 뒤 주차 버킷에 합산 — 정확도 손실 없음).</p>
       <p>DAU/Active REV는 이 뷰에서는 제공하지 않습니다(다른 탭과 동일한 계산을 소재 단위까지 늘리면 데이터량이 지나치게 커짐).</p>
       <p>그 외 지표 정의는 Data Table 탭과 동일합니다. 마지막 주차는 아직 7일이 다 지나지 않은 진행 중 구간일 수 있습니다.</p>
-      <p><b>소재유형</b>: 소재명에 포함된 core/char/fake/etc/help 태그로 자동 분류한 그룹입니다. 이 태그도 세그먼트 계층에 넣어 드래그로 순서를 바꿀 수 있습니다.</p>
-      <p><b>세그먼트 선택</b>: 8개 세그먼트를 전부 뎁스로 쓰면 트리가 깊어지므로, "세그먼트 선택"에서 필요한 것만 켜서 볼 수 있습니다(칩의 ✕로도 제외 가능). 기본 순서는 매체›캠페인명›소재유형›소재›주차›국가›paid/org›OS입니다.</p>
+      <p><b>소재카테고리</b>: 소재명에 포함된 core/char/fake/etc/help 태그로 자동 분류한 그룹입니다(이전 명칭 "소재유형"에서 정정).</p>
+      <p><b>소재유형</b>: 소재 형식입니다 — vid(동영상) / img(이미지) / video_playable(동영상+플레이어블) / playable(플레이어블 단독). Google은 소재가 아니라 adgroup 단위로 데이터가 들어와 형식을 알 수 없으므로 (미상)으로 표시합니다.</p>
+      <p><b>소재명 표기</b>: 풀네임 대신 <code>소재언어_소재넘버링_소재카테고리_소재이름_소재유형</code>만 표시합니다(앱이름·매체명·제작주체·초수 생략). 매체명을 떼기 때문에 같은 소재를 여러 매체에 집행한 경우 소재 축에서는 한 줄로 합쳐집니다 — 매체는 별도 세그먼트로 나눠 보시면 됩니다. Google(adgroup명)과 Applovin은 매체 구조상 규칙을 따르지 않아 각각 원본 그대로 / <code>en_all_<i>카테고리</i>_유형</code> 형태로 표기합니다. 규칙에 맞지 않는 이름은 가공하지 않고 원본을 그대로 둡니다.</p>
+      <p><b>세그먼트 선택</b>: 9개 세그먼트를 전부 뎁스로 쓰면 트리가 깊어지므로, "세그먼트 선택"에서 필요한 것만 켜서 볼 수 있습니다(칩의 ✕로도 제외 가능). 기본 순서는 매체›캠페인명›소재카테고리›소재유형›소재›주차›국가›paid/org›OS입니다.</p>
       <p><b>IPM</b> = 설치 수 / 노출 수 × 1,000 (1,000회 노출당 설치 수). 노출은 cost_etl_geo 기준이라 소재처럼 잘게 쪼갠 단위에서는 정확도가 떨어질 수 있어 소재 간 <b>상대 비교</b>용으로 보시는 걸 권합니다.</p>
     </div>
     <div class="segwrap">
@@ -859,7 +861,7 @@ for(const r of RAW2) r.paid_org = r.media==="organic" ? "organic" : "paid";
 // 열어봐도 화면에서는 병합되도록). 트리/Top Spender는 소재명으로 groupby해 합산하므로,
 // 이름만 통일하면 나머지 합산은 자동으로 처리된다.
 function stripCreativeSize(name){
-  return String(name).replace(/_\d{2,5}x\d{2,5}(\.\w+)?(?=_|$)/gi,"");
+  return String(name).replace(/_\\d{2,5}x\\d{2,5}(\\.\\w+)?(?=_|$)/gi,"");
 }
 for(const r of RAW2) r.creative=stripCreativeSize(r.creative);
 // 소재명 정리(사용자 요청, Applovin 전용): "if_video_playable"/"video_playable"(if_ 유무 두 표기
@@ -870,27 +872,97 @@ for(const r of RAW2){
   if(r.creative==="if_video_playable"||r.creative==="video_playable") r.creative="video_playable(core)";
   else if(r.creative.startsWith("if_")) r.creative=r.creative.slice(3);
 }
-// 소재유형(사용자 요청): 소재명에 포함된 core/char/fake/etc/help 태그로 그룹핑.
-// 명명 규칙상 대부분 "..._<네트워크>_<4~6자리 시퀀스번호>_<유형태그>_<테마명>..." 형태라, 시퀀스번호
-// 바로 다음 토큰을 유형으로 뽑는 게 가장 정확하다 — 그냥 문자열 전체에서 "fake"를 찾으면
-// 예: "if_en_liftoff_26002_core_fakeupgrade(factory)_..."처럼 실제 태그는 core인데 테마명
-// "fakeupgrade"에 "fake"가 포함되어 있어 잘못 분류될 수 있다. 시퀀스번호 토큰이 없는 짧은/테스트용
-// 소재명(예: "fake1", "if_core", "core")은 문자열 포함 여부로 폴백 판정한다.
-const CTYPE_TAGS=["core","char","fake","etc","help"];
-function creativeType(cre){
-  if(cre==="(organic)"||cre==="(no creative)")return cre;
+// ══ 소재명 규칙 ══════════════════════════════════════════════════════════════
+// 명명 규칙: 앱이름_소재언어_매체명_소재넘버링_소재카테고리_소재이름_소재유형_소재제작주체_(초수)
+//   예) if_en_moloco_26007_fake_harvest(watermelon)_vid_ab_30s
+// 화면에는 "소재언어_소재넘버링_소재카테고리_소재이름_소재유형"만 보인다(사용자 요청) —
+// 앱이름·매체명·제작주체·초수는 뗀다. 매체명을 떼면 같은 소재가 매체만 다른 경우 한 줄로
+// 합쳐지는데, 매체는 이미 별도 세그먼트이므로 소재 축에서는 합치는 게 맞다.
+//
+// 토큰 위치가 고정이 아니다(예: "if_en_test_meta_core_..."는 넘버링이 아예 없음). 그래서
+// 인덱스가 아니라 앵커(유형 토큰/넘버링/카테고리 태그)를 찾아 자른다. 셋 중 하나라도 못
+// 찾으면 가공하지 않고 원본을 그대로 둔다.
+const CCAT_TAGS=["core","char","fake","etc","help"];
+// 주의: 이 블록은 바깥 템플릿 리터럴 안에 들어가므로 정규식 백슬래시는 반드시 \\로 써야 한다
+// (\d 로 쓰면 출력 HTML에서 d 로 바뀌어 정규식이 깨진다).
+const isPlaceholderCre=(c)=>/^\\(|^\\{/.test(String(c));    // (organic) / (no creative) / {AD_NAME}
+const hasLangPrefix=(c)=>/^(?:[a-z0-9]+_)?(en|ja|kr|ko)_/i.test(String(c));
+// 소재명을 토큰으로 쪼개고 공백 오타("char_ ai+story1")를 흡수한다.
+const creTokens=(c)=>String(c).split("_").map(s=>s.trim()).filter(Boolean);
+// 소재유형 토큰의 위치와 값. video+playable 쌍 > playable > vid > img 순으로 첫 매치.
+function findFormat(t){
+  for(let i=0;i<t.length;i++){
+    const a=t[i].toLowerCase();
+    if(a==="video"&&t[i+1]&&t[i+1].toLowerCase().startsWith("playable"))return{i,fmt:"video_playable"};
+    if(a.startsWith("playable"))return{i,fmt:"playable"};
+    if(a==="vid")return{i,fmt:"vid"};
+    if(a==="img")return{i,fmt:"img"};
+  }
+  return null;
+}
+// 소재유형(vid/img/video_playable/playable) — 세그먼트 값.
+// Google은 소재가 아니라 adgroup명이 들어오고(한 adgroup에 여러 형식이 섞일 수 있음) 형식을
+// 알 수 없어 (미상)으로 둔다. "전부 동영상"으로 보려면 아래 google 분기를 "vid"로 바꾸면 된다.
+function creativeFormat(cre,media){
+  if(isPlaceholderCre(cre))return "(미상)";
+  if(media==="googleadwords_int")return "(미상)";
+  const f=findFormat(creTokens(cre));
+  if(f)return f.fmt;
+  // 언어구분자가 없는 Applovin 소재는 전부 동영상(사용자 확인).
+  if(media==="applovin_int"&&!hasLangPrefix(cre))return "vid";
+  return "(미상)";
+}
+// 규칙을 따르는 소재명을 "언어_넘버링_카테고리_소재이름_유형"으로 줄인다.
+function shortenStd(cre){
+  const t=creTokens(cre);
+  const f=findFormat(t); if(!f)return null;
+  const ni=t.findIndex(p=>/^[0-9]{4,6}$/.test(p)); if(ni<0)return null;
+  // 카테고리는 넘버링 바로 다음 토큰이 우선. 테마명에 태그 문자열이 섞인 경우(예: core_
+  // "fakeupgrade")를 잘못 잡지 않기 위해서다. 없으면 태그 전체 검색으로 폴백.
+  let ci=(t[ni+1]&&CCAT_TAGS.includes(t[ni+1].toLowerCase()))?ni+1:t.findIndex(p=>CCAT_TAGS.includes(p.toLowerCase()));
+  if(ci<0)return null;
+  const lang=/^(en|ja|kr|ko)$/i.test(t[1]||"")?t[1].toLowerCase():null;
+  const tail=f.fmt==="video_playable"?["video","playable"]:[t[f.i]];
+  return [lang,t[ni],t[ci].toLowerCase(),...t.slice(ci+1,f.i),...tail].filter(Boolean).join("_");
+}
+// 매체별 예외(사용자 확인): Google·Applovin은 매체 구조상 소재 단위 데이터가 규칙을 따르지 않는다.
+//  · Google  — 값이 adgroup명이라 가공하지 않고 원본 그대로 노출한다.
+//  · Applovin — 언어구분자가 없으면 언어=en, 넘버링=all로 채우고 카테고리 자리에 기존 이름을 쓴다.
+//               "video_playable(core)"처럼 괄호가 있으면 그 안의 값을 카테고리로 쓴다.
+function shortCreative(cre,media){
+  if(isPlaceholderCre(cre))return cre;                      // 플레이스홀더는 손대지 않음
+  if(media==="googleadwords_int")return cre;
+  if(media==="applovin_int"&&!hasLangPrefix(cre)){
+    const m=String(cre).match(/^video_playable\\((\\w+)\\)$/i);
+    if(m)return \`en_all_\${m[1].toLowerCase()}_video_playable\`;
+    return \`en_all_\${cre}_vid\`;
+  }
+  return shortenStd(cre)||cre;
+}
+// 소재카테고리(core/char/fake/etc/help) — 예전에 "소재유형"이라 부르던 값(사용자 정정).
+// 단축된 이름 기준으로 판정한다: "en_26007_fake_harvest(watermelon)_vid"처럼 넘버링이 남아
+// 있으면 그 다음 토큰을, "en_all_char1_vid"/"core"처럼 없으면 문자열 포함 여부로 폴백한다.
+function creativeCat(cre){
+  if(isPlaceholderCre(cre))return cre;
   const parts=String(cre).split("_");
   const si=parts.findIndex(p=>/^[0-9]{4,6}$/.test(p));
   if(si>=0 && parts[si+1]){
     const t=parts[si+1].toLowerCase();
-    if(CTYPE_TAGS.includes(t))return t;
+    if(CCAT_TAGS.includes(t))return t;
   }
   const low=String(cre).toLowerCase();
-  for(const t of CTYPE_TAGS)if(low.includes(t))return t;
+  for(const t of CCAT_TAGS)if(low.includes(t))return t;
   return "기타";
 }
-for(const r of RAW2) r.creative_type = creativeType(r.creative);
-const CTYPE_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","기타":"var(--dim)"};
+// 소재유형은 단축 전 이름으로 판정하고(원본 토큰이 온전할 때가 정확), 그 다음 이름을 줄인 뒤
+// 카테고리를 뽑는다.
+for(const r of RAW2){
+  r.creative_format = creativeFormat(r.creative,r.media);
+  r.creative = shortCreative(r.creative,r.media);
+  r.creative_cat = creativeCat(r.creative);
+}
+const CCAT_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","기타":"var(--dim)"};
+const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(--applovin)",playable:"var(--liftoff)","(미상)":"var(--dim)"};
 // "전체 합계" DAU 전용: 국가별·날짜별 dedup 유저 ID(정수). 세그먼트 트리 노드의 DAU(위 DAILY_ACTIVE_RAW
 // 기반, 여러 날짜 단순 합산)와는 별개로, 전체 합계 행만 이 데이터로 "기간 내 실제 순수 유저 수"를 계산한다.
 const DAU_USERS = ${JSON.stringify(DAU_USERS)};
@@ -966,10 +1038,11 @@ const METRICS=[
 ];
 // ══ Data Table(소재별) 탭 — RAW2(소재+주차) 전용 차원/지표 메타. DAU/Active REV는 이 데이터셋에
 // 없으므로(캘린더일 기준 집계를 별도로 만들지 않음) METRICS에서 그 두 항목만 제외한 목록을 쓴다.
-const DIM_META2={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},creative:{label:"소재"},creative_type:{label:"소재유형"},week:{label:"주차"}};
-// 기본 세그먼트 순서(사용자 요청): 매체-캠페인명-소재유형-소재-주차-국가-paid/org-os.
+const DIM_META2={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},creative:{label:"소재"},creative_cat:{label:"소재카테고리"},creative_format:{label:"소재유형"},week:{label:"주차"}};
+// 기본 세그먼트 순서(사용자 요청): 매체-캠페인명-소재카테고리-소재유형-소재-주차-국가-paid/org-os.
+// 소재유형은 카테고리 다음에 둬서 카테고리→형식→개별소재 순으로 좁혀지게 한다.
 // LEVELS2는 "순서"만 담고, 실제 트리 뎁스로 쓸지는 ACTIVE2(활성 여부)가 결정한다.
-let LEVELS2=["media","campaign","creative_type","creative","week","country","paid_org","os"];
+let LEVELS2=["media","campaign","creative_cat","creative_format","creative","week","country","paid_org","os"];
 // 활성 세그먼트(사용자 요청): 8개를 전부 뎁스로 쓰면 트리가 너무 깊어져서, 필요한 것만 골라
 // 쓸 수 있게 한다. 기본값은 전체 활성(기존 동작과 동일) — "세그먼트 선택" 드롭다운에서 해제한다.
 let ACTIVE2=new Set(LEVELS2);
@@ -1475,11 +1548,11 @@ function build2(rows,depth){
   for(const [val,rs] of Object.entries(groups)){
     const agg=blank();for(const r of rs)addInto(agg,r);derive(agg);
     let children=build2(rs,depth+1);
-    // 소재유형↔소재 뎁스 중복 병합(사용자 요청): 소재유형이 "core"인 그룹의 소재가 딱 하나뿐이고
-    // 그 값도 "core"처럼 부모와 완전히 같으면, 똑같은 라벨을 한 번 더 클릭해야 해서 헷갈린다.
-    // 이런 경우 그 소재 뎁스를 건너뛰고 그 자식들을 바로 이 노드 밑에 이어붙인다(칩을 드래그해
-    // 순서를 바꿔 소재→소재유형 순서가 되어도 반대 방향으로 동일하게 동작).
-    const isTypeCreativePair=(key==="creative_type"&&nextKey==="creative")||(key==="creative"&&nextKey==="creative_type");
+    // 소재카테고리↔소재 뎁스 중복 병합(사용자 요청): 소재카테고리가 "core"인 그룹의 소재가 딱
+    // 하나뿐이고 그 값도 "core"처럼 부모와 완전히 같으면(Google adgroup명이 대표적), 똑같은 라벨을
+    // 한 번 더 클릭해야 해서 헷갈린다. 이런 경우 그 소재 뎁스를 건너뛰고 자식들을 바로 이 노드
+    // 밑에 이어붙인다(칩을 드래그해 소재→소재카테고리 순서가 되어도 반대 방향으로 동일하게 동작).
+    const isTypeCreativePair=(key==="creative_cat"&&nextKey==="creative")||(key==="creative"&&nextKey==="creative_cat");
     if(isTypeCreativePair && children && children.length===1 && String(children[0].value).toLowerCase()===String(val).toLowerCase()){
       children=shiftDepth2(children[0].children,-1);
     }
@@ -1503,7 +1576,8 @@ function dimLabel2(node){
   if(node.dim==="paid_org")return \`<span class="po-pill po-\${esc(v)}">\${esc(v)}</span>\`;
   if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--organic)'}"></span>\${esc(MLABEL[v]||v)}\`;
   if(node.dim==="os")return \`<span class="os-pill os-\${esc(v)}">\${esc(v)}</span>\`;
-  if(node.dim==="creative_type")return \`<span class="ctype-pill" style="border-color:\${CTYPE_COLOR[v]||'var(--border2)'};color:\${CTYPE_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
+  if(node.dim==="creative_cat")return \`<span class="ctype-pill" style="border-color:\${CCAT_COLOR[v]||'var(--border2)'};color:\${CCAT_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
+  if(node.dim==="creative_format")return \`<span class="ctype-pill" style="border-color:\${CFMT_COLOR[v]||'var(--border2)'};color:\${CFMT_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
   if(node.dim==="week")return esc(v);
   if(node.dim==="campaign"||node.dim==="creative")return \`<span class="camp" title="\${esc(v)}">\${esc(v)}</span>\`;
   return countryLabel(v);
@@ -1562,7 +1636,7 @@ function computeTopSpenders2(rows){
     const gk=r.media+"|||"+r.campaign;
     groupCost[gk]=(groupCost[gk]||0)+r.cost;
     const ck=gk+"|||"+r.creative;
-    if(!cell[ck])cell[ck]={media:r.media,campaign:r.campaign,creative:r.creative,creative_type:r.creative_type,cost:0,install_total:0,rev_d1:0,rev_d3:0,rev_d7:0,imp:0,clk:0};
+    if(!cell[ck])cell[ck]={media:r.media,campaign:r.campaign,creative:r.creative,creative_cat:r.creative_cat,cost:0,install_total:0,rev_d1:0,rev_d3:0,rev_d7:0,imp:0,clk:0};
     const b=cell[ck];
     b.cost+=r.cost; b.install_total+=r.install_total; b.rev_d1+=r.rev_d1; b.rev_d3+=(r.rev_d3||0); b.rev_d7+=(r.rev_d7||0);
     b.imp+=(r.imp||0); b.clk+=(r.clk||0);
@@ -1599,7 +1673,7 @@ function renderTopSpenders2(){
   const weekTxt=[...selectedWeeks2].sort().join(", ");
   let h=\`<div class="topspend-head">🏆 매체×캠페인별 Top Spender 소재 <span class="topspend-week">(선택 주차: \${esc(weekTxt)})</span></div>\`;
   h+='<div class="topspend-wrap"><table class="topspend-tbl"><thead><tr>'+
-     '<th class="left">매체</th><th class="left">캠페인</th><th class="left">Top 소재</th><th>유형</th>'+
+     '<th class="left">매체</th><th class="left">캠페인</th><th class="left">Top 소재</th><th>카테고리</th>'+
      '<th>Cost</th><th>캠페인 내 비중</th><th>Install</th><th>CPI</th><th>D1 ROAS</th><th>D7 ROAS</th>'+
      '<th>Imp</th><th>CPM</th><th>CTR</th><th>CPC</th><th>CVR</th>'+
      '</tr></thead><tbody>';
@@ -1608,7 +1682,7 @@ function renderTopSpenders2(){
       <td class="left"><span class="dot" style="background:\${MCOLOR[b.media]||'var(--organic)'}"></span>\${esc(MLABEL[b.media]||b.media)}</td>
       <td class="left"><span class="camp" title="\${esc(b.campaign)}">\${esc(b.campaign)}</span></td>
       <td class="left"><span class="camp" title="\${esc(b.creative)}">\${esc(b.creative)}</span></td>
-      <td><span class="ctype-pill" style="border-color:\${CTYPE_COLOR[b.creative_type]||'var(--border2)'};color:\${CTYPE_COLOR[b.creative_type]||'var(--txt)'}">\${esc(b.creative_type)}</span></td>
+      <td><span class="ctype-pill" style="border-color:\${CCAT_COLOR[b.creative_cat]||'var(--border2)'};color:\${CCAT_COLOR[b.creative_cat]||'var(--txt)'}">\${esc(b.creative_cat)}</span></td>
       <td class="topspend-cost">\${fmt(b.cost,"$")}</td>
       <td>\${fmt(b.share,"%")}</td>
       <td>\${fmt(b.install_total,"n")}</td>
