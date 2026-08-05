@@ -22,10 +22,16 @@ const DAILY_ACTIVE = (RESULT_DATA.dailyActive||[])
   .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
 // "전체 합계" DAU 전용 dedup 유저 ID(국가별·날짜별) — 세그먼트/캠페인 분해가 없으므로 별도 제외 필터 불필요.
 const DAU_USERS = RESULT_DATA.dauUsers || {};
+// 소재 단위에서 제외할 값(사용자 요청). 캠페인 쪽 "{CAMPAIGN_NAME}"과 같은 유형 — 매체 트래킹
+// 매크로가 치환되지 않고 그대로 들어온 것으로, 비용·설치·매출이 모두 0이라 분석 가치가 없다.
+const EXCLUDED_CREATIVES = new Set([
+  "{AD_NAME}",
+]);
 // 소재(creative) 뎁스 + 주차별 버킷(사용자 요청) — ROWS(일자별, 소재 없음)와 완전히 별개의 데이터셋.
 // campaign/country 제외 필터는 ROWS와 동일하게 적용.
 const ROWS_CREATIVE = (RESULT_DATA.rowsCreative||[])
-  .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
+  .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`))
+  .filter(r => !EXCLUDED_CREATIVES.has(r.creative));
 // 대시보드 A(국가/OS/매체/일자별 성과) — 매일 11시 스케줄이 이 파일을 아티팩트로 재게시한다.
 const OUT = outPath("geo-cohort-table.html");
 
@@ -739,6 +745,7 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       <p><b>소재카테고리</b>: 소재명에 포함된 core/char/fake/etc/help 태그로 자동 분류한 그룹입니다(이전 명칭 "소재유형"에서 정정).</p>
       <p><b>소재유형</b>: 소재 형식입니다 — vid(동영상) / img(이미지) / video_playable(동영상+플레이어블) / playable(플레이어블 단독). Google은 소재가 아니라 adgroup 단위로 데이터가 들어와 형식을 알 수 없으므로 (미상)으로 표시합니다.</p>
       <p><b>소재명 표기</b>: 풀네임 대신 <code>소재언어_소재넘버링_소재카테고리_소재이름_소재유형</code>만 표시합니다(앱이름·매체명·제작주체·초수 생략). 매체명을 떼기 때문에 같은 소재를 여러 매체에 집행한 경우 소재 축에서는 한 줄로 합쳐집니다 — 매체는 별도 세그먼트로 나눠 보시면 됩니다. Google(adgroup명)과 Applovin은 매체 구조상 규칙을 따르지 않아 각각 원본 그대로 / <code>en_all_<i>카테고리</i>_유형</code> 형태로 표기합니다. 규칙에 맞지 않는 이름은 가공하지 않고 원본을 그대로 둡니다.</p>
+      <p><b>(SKAN)</b>: iOS SKAdNetwork 설치입니다. 애플이 소재 단위 식별자를 주지 않아 소재명이 빈 채로 들어오므로 개별 소재로 나눌 수 없습니다(비용·노출도 소재 단위로 매칭되지 않아 0). 매체가 소재명을 넘기지 않은 <b>(no creative)</b>와는 구분해 표시합니다. 소재별 설치 합계를 볼 때 이만큼은 소재 미상으로 빠져 있다는 점을 감안해 주세요.</p>
       <p><b>세그먼트 선택</b>: 9개 세그먼트를 전부 뎁스로 쓰면 트리가 깊어지므로, "세그먼트 선택"에서 필요한 것만 켜서 볼 수 있습니다(칩의 ✕로도 제외 가능). 기본 순서는 매체›캠페인명›소재카테고리›소재유형›소재›주차›국가›paid/org›OS입니다.</p>
       <p><b>IPM</b> = 설치 수 / 노출 수 × 1,000 (1,000회 노출당 설치 수). 노출은 cost_etl_geo 기준이라 소재처럼 잘게 쪼갠 단위에서는 정확도가 떨어질 수 있어 소재 간 <b>상대 비교</b>용으로 보시는 걸 권합니다.</p>
     </div>
@@ -957,11 +964,16 @@ function creativeCat(cre){
 // 소재유형은 단축 전 이름으로 판정하고(원본 토큰이 온전할 때가 정확), 그 다음 이름을 줄인 뒤
 // 카테고리를 뽑는다.
 for(const r of RAW2){
+  // SKAN 설치 표시(사용자 요청): SKAN은 애플이 소재 단위 식별자를 주지 않아 소재명이 빈 채로
+  // 들어온다. 데이터로 확인한 결과 소재명이 비어있으면서 install_skan>0인 행은 전부 iOS이고
+  // SKAN 100%(일반 설치와 섞인 행 0건)라, 매체가 소재명을 안 넘긴 경우와 명확히 구분된다.
+  // 이걸 "(no creative)"로 뭉뚱그리면 누락처럼 보이므로 "(SKAN)"으로 따로 표시한다.
+  if(r.creative==="(no creative)" && (r.install_skan||0)>0) r.creative="(SKAN)";
   r.creative_format = creativeFormat(r.creative,r.media);
   r.creative = shortCreative(r.creative,r.media);
   r.creative_cat = creativeCat(r.creative);
 }
-const CCAT_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","기타":"var(--dim)"};
+const CCAT_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","(SKAN)":"var(--muted)","기타":"var(--dim)"};
 const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(--applovin)",playable:"var(--liftoff)","(미상)":"var(--dim)"};
 // "전체 합계" DAU 전용: 국가별·날짜별 dedup 유저 ID(정수). 세그먼트 트리 노드의 DAU(위 DAILY_ACTIVE_RAW
 // 기반, 여러 날짜 단순 합산)와는 별개로, 전체 합계 행만 이 데이터로 "기간 내 실제 순수 유저 수"를 계산한다.
