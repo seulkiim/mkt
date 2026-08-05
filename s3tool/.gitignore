@@ -2,3 +2,4 @@ node_modules/
 *-result.json
 *-cache.json
 data/
+out/

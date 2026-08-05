@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from "fs";
-import { dataPath } from "./paths.mjs";
+import { dataPath, outPath } from "./paths.mjs";
 const {rows: ROWS, installs: INSTALLS} = JSON.parse(readFileSync(dataPath("format-tree-result.json"),"utf8"));
-const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/format-tree.html";
+// 대시보드 B(IAA 광고매출 형식 분석) — 매일 11시 스케줄이 이 파일을 아티팩트로 재게시한다.
+const OUT = outPath("format-tree.html");
 const dts=[...new Set(ROWS.map(r=>r.date))].sort();
 const RANGE=dts.length?dts[0].replace(/-/g,"/")+" ~ "+dts.at(-1).replace(/-/g,"/"):"";
 function addDays(iso,n){const d=new Date(iso+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}

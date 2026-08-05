@@ -54,9 +54,27 @@ function weekLabel(dateStr){
   const e=new Date(eT).toISOString().slice(0,10);
   return `${s.slice(5)}~${e.slice(5)}`;
 }
+// 소재 규격(사이즈) 병합(사용자 요청): 소재명 끝/중간에 붙는 "_1920x1080"류 배치 규격 토큰을
+// 제거해, 규격만 다르고 나머지 이름이 같은 소재들을 하나로 합친다. 같은 소재를 매체 규격에 맞춰
+// 리사이즈한 것일 뿐이므로 성과는 합산해서 보는 게 맞다.
+//   예) ..._fake_harvest(watermelon)_vid_ab_1200x1200_30s
+//       ..._fake_harvest(watermelon)_vid_ab_1080x1920_30s  → ..._fake_harvest(watermelon)_vid_ab_30s
+// 규격 뒤에 파일 확장자가 붙은 경우도 함께 제거한다(예: "..._720x720.jpg").
+// RC 누적기 키(KC)가 이 라벨을 쓰므로, 여기서 이름만 통일하면 cost/설치/매출 합산은 자동 처리된다.
+// 소재명 오타 교정(사용자 확인): 매체에 등록될 때 ")" 뒤 구분자 "_"가 빠진 채로 들어온 소재가
+// 있다(예: "...(watermelon)vid_wmp_..." ↔ "...(watermelon)_vid_wmp_..."). 매체 쪽에서는 이후
+// 수정됐지만 이미 적재된 과거 데이터에는 두 표기가 함께 남아 같은 소재가 두 줄로 갈린다.
+// ")" 바로 뒤에 알파벳이 오는 경우는 이 누락 케이스뿐임을 데이터로 확인하고 "_"를 채워 넣는다.
+function fixCreativeTypo(name){
+  return String(name).replace(/\)(?=[A-Za-z])/g,")_");
+}
+function stripCreativeSize(name){
+  const t=fixCreativeTypo(name).replace(/_\d{2,5}x\d{2,5}(\.\w+)?(?=_|$)/gi,"");
+  return t.trim()||String(name); // 이름이 통째로 사라지는 예외 상황에서는 원본 유지
+}
 function creativeLabel(raw,media){
   const s=raw==null?"":String(raw).trim();
-  if(s)return s;
+  if(s)return stripCreativeSize(s);
   return media==="organic"?"(organic)":"(no creative)";
 }
 // Google Ads(googleadwords_int)는 매체 특성상 소재(af_ad/ad) 단위 데이터를 공유하지 않아 항상

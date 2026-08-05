@@ -2,6 +2,7 @@ import { ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
+import { outPath } from "./paths.mjs";
 
 const BASE   = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const OS_OF = { "com.albus.idolharvest":"Android", "id6756664337":"iOS" };
@@ -49,6 +50,6 @@ for(const [country,byDate] of Object.entries(RAW)){
   dump[country]={};
   for(const [date,set] of Object.entries(byDate)) dump[country][date]=[...set].sort();
 }
-writeFileSync("C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/cf1d2b8d-9ab4-403d-9cdf-f01449d0d17f/scratchpad/dau-raw-baseline.json", JSON.stringify(dump,null,2), "utf8");
+writeFileSync(outPath("dau-raw-baseline.json"), JSON.stringify(dump,null,2), "utf8");
 let total=0; for(const byDate of Object.values(dump)) for(const ids of Object.values(byDate)) total+=ids.length;
 process.stdout.write(`baseline dump written. countries=${Object.keys(dump).length} total(country,date) raw-id entries summed=${total}\n`);

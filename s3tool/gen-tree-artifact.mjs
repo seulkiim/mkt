@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "fs";
-import { dataPath } from "./paths.mjs";
+import { dataPath, outPath } from "./paths.mjs";
 // 리포트에서 제외할 (campaign, country) 조합(사용자 요청). 캠페인 전체가 아니라, 캠페인명의
 // 지역 타겟(예: "2607_if_kr_ua_ios_install_meta_dl"의 kr=Korea)과 실제 귀속 country_code가
 // 어긋난 오귀속 행만 제외한다 — 예: kr 타겟 캠페인인데 country=US로 잘못 귀속된 설치/매출.
@@ -26,7 +26,8 @@ const DAU_USERS = RESULT_DATA.dauUsers || {};
 // campaign/country 제외 필터는 ROWS와 동일하게 적용.
 const ROWS_CREATIVE = (RESULT_DATA.rowsCreative||[])
   .filter(r => !EXCLUDED_CAMPAIGNS_FULL.has(r.campaign) && !EXCLUDED_CAMPAIGN_COUNTRY.has(`${r.campaign}|||${r.country}`));
-const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/geo-cohort-table.html";
+// 대시보드 A(국가/OS/매체/일자별 성과) — 매일 11시 스케줄이 이 파일을 아티팩트로 재게시한다.
+const OUT = outPath("geo-cohort-table.html");
 
 const _dates=[...new Set(ROWS.map(r=>r.date))].sort();
 const RANGE=_dates.length?(_dates[0].replace(/-/g,"/")+" ~ "+_dates[_dates.length-1].replace(/-/g,"/")):"";
@@ -736,12 +737,22 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       <p>DAU/Active REV는 이 뷰에서는 제공하지 않습니다(다른 탭과 동일한 계산을 소재 단위까지 늘리면 데이터량이 지나치게 커짐).</p>
       <p>그 외 지표 정의는 Data Table 탭과 동일합니다. 마지막 주차는 아직 7일이 다 지나지 않은 진행 중 구간일 수 있습니다.</p>
       <p><b>소재유형</b>: 소재명에 포함된 core/char/fake/etc/help 태그로 자동 분류한 그룹입니다. 이 태그도 세그먼트 계층에 넣어 드래그로 순서를 바꿀 수 있습니다.</p>
+      <p><b>세그먼트 선택</b>: 8개 세그먼트를 전부 뎁스로 쓰면 트리가 깊어지므로, "세그먼트 선택"에서 필요한 것만 켜서 볼 수 있습니다(칩의 ✕로도 제외 가능). 기본 순서는 매체›캠페인명›소재유형›소재›주차›국가›paid/org›OS입니다.</p>
+      <p><b>IPM</b> = 설치 수 / 노출 수 × 1,000 (1,000회 노출당 설치 수). 노출은 cost_etl_geo 기준이라 소재처럼 잘게 쪼갠 단위에서는 정확도가 떨어질 수 있어 소재 간 <b>상대 비교</b>용으로 보시는 걸 권합니다.</p>
     </div>
     <div class="segwrap">
       <div class="segbar" id="segbar2"></div>
-      <span class="seglabel">세그먼트 계층 (드래그하거나 ◀▶로 순서 변경)</span>
+      <span class="seglabel">세그먼트 계층 (드래그하거나 ◀▶로 순서 변경, ✕로 제외)</span>
     </div>
     <div class="bar">
+      <div class="barsec">
+        <span class="barsec-label">세그먼트</span>
+        <div class="dd" id="segDD2">
+          <button class="btn ddbtn" onclick="toggleSegDD2(event)">세그먼트 선택 <span id="segcount2"></span> ▾</button>
+          <div class="ddpanel" id="segpanel2"></div>
+        </div>
+      </div>
+      <div class="bar-divider"></div>
       <div class="barsec">
         <span class="barsec-label">필터</span>
         <div class="dd" id="weekDD2">
@@ -843,11 +854,10 @@ const DAILY_ACTIVE_RAW = DAILY_ACTIVE_ALL.filter(r=>!UNKNOWN.includes(r.country)
 const RAW2_ALL = ${JSON.stringify(ROWS_CREATIVE)};
 const RAW2 = RAW2_ALL.filter(r=>!UNKNOWN.includes(r.country));
 for(const r of RAW2) r.paid_org = r.media==="organic" ? "organic" : "paid";
-// 소재 규격(사이즈) 병합(사용자 요청, 전체 매체 공통): 소재명 뒤에 붙는 "_1920x1080"류 배치
-// 사이즈 표기만 다르고 나머지 이름이 완전히 같은 소재들은 같은 소재의 사이즈 변형일 뿐이므로
-// 사이즈 표기를 제거해 하나의 소재로 합친다(뒤에 파일 확장자가 붙은 경우도 함께 제거,
-// 예: "..._720x720.jpg" → "..."). 트리/Top Spender는 소재명으로 groupby해 합산하므로,
-// 여기서 이름만 통일하면 나머지 합산은 자동으로 처리된다.
+// 소재 규격(사이즈) 병합 — 이제는 수집 단계(geo-cohort-os.mjs의 creativeLabel)에서 이미
+// 처리되므로 여기 남은 것은 멱등한 안전망이다(규격 토큰이 남아있는 예전 result JSON을 그대로
+// 열어봐도 화면에서는 병합되도록). 트리/Top Spender는 소재명으로 groupby해 합산하므로,
+// 이름만 통일하면 나머지 합산은 자동으로 처리된다.
 function stripCreativeSize(name){
   return String(name).replace(/_\d{2,5}x\d{2,5}(\.\w+)?(?=_|$)/gi,"");
 }
@@ -957,8 +967,18 @@ const METRICS=[
 // ══ Data Table(소재별) 탭 — RAW2(소재+주차) 전용 차원/지표 메타. DAU/Active REV는 이 데이터셋에
 // 없으므로(캘린더일 기준 집계를 별도로 만들지 않음) METRICS에서 그 두 항목만 제외한 목록을 쓴다.
 const DIM_META2={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},creative:{label:"소재"},creative_type:{label:"소재유형"},week:{label:"주차"}};
-let LEVELS2=["country","paid_org","media","week","campaign","creative_type","creative","os"];
-const METRICS2=METRICS.filter(m=>m.k!=="dau"&&m.k!=="active_rev");
+// 기본 세그먼트 순서(사용자 요청): 매체-캠페인명-소재유형-소재-주차-국가-paid/org-os.
+// LEVELS2는 "순서"만 담고, 실제 트리 뎁스로 쓸지는 ACTIVE2(활성 여부)가 결정한다.
+let LEVELS2=["media","campaign","creative_type","creative","week","country","paid_org","os"];
+// 활성 세그먼트(사용자 요청): 8개를 전부 뎁스로 쓰면 트리가 너무 깊어져서, 필요한 것만 골라
+// 쓸 수 있게 한다. 기본값은 전체 활성(기존 동작과 동일) — "세그먼트 선택" 드롭다운에서 해제한다.
+let ACTIVE2=new Set(LEVELS2);
+// 현재 트리 뎁스로 쓰이는 세그먼트 목록(순서 유지, 비활성 제외).
+function activeLevels2(){return LEVELS2.filter(k=>ACTIVE2.has(k));}
+const METRICS2=[
+  ...METRICS.filter(m=>m.k!=="dau"&&m.k!=="active_rev"),
+  {k:"ipm",label:"IPM<br>(inst/1k imp)",type:"n2",hg:"yellow"},
+];
 function blank(){return {cost:0,install_total:0,install_reg:0,install_skan:0,imp:0,clk:0,pur_d1_cnt:0,pur_d3_cnt:0,rev_d1:0,rev_d3:0,rev_d7:0,rev_d1_iap:0,rev_d1_iaa:0,rev_d3_iap:0,rev_d3_iaa:0,rev_d7_iap:0,rev_d7_iaa:0,rev_d14:0,rev_d14_iap:0,rev_d14_iaa:0,rev_d21:0,rev_d21_iap:0,rev_d21_iaa:0,rev_d30:0,rev_d30_iap:0,rev_d30_iaa:0,skan_rev:0,rr_d1_users:0,rr_d3_users:0,rr_d7_users:0,rr_d30_users:0};}
 function addInto(a,r){a.cost+=r.cost;a.install_total+=r.install_total;a.install_reg+=r.install_reg;a.install_skan+=r.install_skan;a.imp+=(r.imp||0);a.clk+=(r.clk||0);a.pur_d1_cnt+=(r.pur_d1_cnt||0);a.pur_d3_cnt+=(r.pur_d3_cnt||0);a.rev_d1+=r.rev_d1;a.rev_d3+=r.rev_d3;a.rev_d7+=(r.rev_d7||0);a.rev_d1_iap+=r.rev_d1_iap;a.rev_d1_iaa+=r.rev_d1_iaa;a.rev_d3_iap+=r.rev_d3_iap;a.rev_d3_iaa+=r.rev_d3_iaa;a.rev_d7_iap+=(r.rev_d7_iap||0);a.rev_d7_iaa+=(r.rev_d7_iaa||0);a.rev_d14+=(r.rev_d14||0);a.rev_d14_iap+=(r.rev_d14_iap||0);a.rev_d14_iaa+=(r.rev_d14_iaa||0);a.rev_d21+=(r.rev_d21||0);a.rev_d21_iap+=(r.rev_d21_iap||0);a.rev_d21_iaa+=(r.rev_d21_iaa||0);a.rev_d30+=(r.rev_d30||0);a.rev_d30_iap+=(r.rev_d30_iap||0);a.rev_d30_iaa+=(r.rev_d30_iaa||0);a.skan_rev+=(r.skan_rev||0);a.rr_d1_users+=(r.rr_d1_users||0);a.rr_d3_users+=(r.rr_d3_users||0);a.rr_d7_users+=(r.rr_d7_users||0);a.rr_d30_users+=(r.rr_d30_users||0);}
 function derive(a){
@@ -984,6 +1004,10 @@ function derive(a){
   a.ctr=a.imp>0?a.clk/a.imp*100:null;      // 클릭률
   a.cpc=a.clk>0?a.cost/a.clk:null;          // 클릭당 비용
   a.cvr=a.clk>0?a.install_total/a.clk*100:null; // 클릭→설치 전환율
+  // IPM(Installs Per Mille) = 1,000회 노출당 설치 수(사용자 요청).
+  // 주의: 노출(imp)은 cost_etl_geo 기준이라 소재처럼 잘게 쪼갠 단위에서는 정확도가 떨어질 수
+  // 있다(대시보드 B의 eCPM 주석과 동일한 한계) — 소재 간 상대 비교용으로 본다.
+  a.ipm=a.imp>0?a.install_total/a.imp*1000:null;
   return a;
 }
 
@@ -1071,7 +1095,7 @@ function rebuild(){
 }
 const expanded=new Set();
 
-function fmt(v,t){if(v==null)return '<span class="na">–</span>';if(t==="$")return "$"+(+v).toLocaleString(undefined,{maximumFractionDigits:2});if(t==="%")return (+v).toFixed(1)+"%";if(t==="n")return (+v).toLocaleString();return v;}
+function fmt(v,t){if(v==null)return '<span class="na">–</span>';if(t==="$")return "$"+(+v).toLocaleString(undefined,{maximumFractionDigits:2});if(t==="%")return (+v).toFixed(1)+"%";if(t==="n")return (+v).toLocaleString();if(t==="n2")return (+v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});return v;}
 function countryLabel(v){
   if(v==="WW")return 'WW(SKAN)';
   if(["??","N/A",""].includes(v))return '미상 (국가정보 없음)';
@@ -1441,9 +1465,10 @@ function shiftDepth2(nodes,delta){
 }
 let idc2=0;
 function build2(rows,depth){
-  if(depth>=LEVELS2.length)return null;
-  const key=LEVELS2[depth];
-  const nextKey=LEVELS2[depth+1];
+  const ACT=activeLevels2();
+  if(depth>=ACT.length)return null;
+  const key=ACT[depth];
+  const nextKey=ACT[depth+1];
   const groups={};
   for(const r of rows){(groups[r[key]]=groups[r[key]]||[]).push(r);}
   const nodes=[];
@@ -1628,20 +1653,49 @@ function toggleCountryDD2(e){e.stopPropagation();document.getElementById("cddpan
 document.addEventListener("click",e=>{if(!document.getElementById("countryDD2").contains(e.target))document.getElementById("cddpanel2").classList.remove("open");});
 
 let dragKey2=null;
+// 활성 세그먼트만 칩으로 표시한다(비활성은 "세그먼트 선택" 드롭다운에서 다시 켤 수 있음).
 function renderSegBar2(){
   const el=document.getElementById("segbar2");
-  el.innerHTML=LEVELS2.map((k,i)=>\`<div class="chip" draggable="true" data-k="\${k}"
+  const act=activeLevels2();
+  el.innerHTML=act.map((k,i)=>\`<div class="chip" draggable="true" data-k="\${k}"
       ondragstart="segDragStart2(event)" ondragover="segDragOver2(event)" ondragleave="segDragLeave2(event)" ondrop="segDrop2(event)" ondragend="segDragEnd2(event)">
     <span class="chip-num">\${i+1}</span><span class="chip-label">\${DIM_META2[k].label}</span>
     <span class="chip-btns">
       <button class="chip-btn" \${i===0?'disabled':''} onclick="moveSeg2('\${k}',-1)" title="앞으로">◀</button>
-      <button class="chip-btn" \${i===LEVELS2.length-1?'disabled':''} onclick="moveSeg2('\${k}',1)" title="뒤로">▶</button>
+      <button class="chip-btn" \${i===act.length-1?'disabled':''} onclick="moveSeg2('\${k}',1)" title="뒤로">▶</button>
+      <button class="chip-btn" \${act.length<=1?'disabled':''} onclick="toggleSeg2('\${k}')" title="이 세그먼트 빼기">✕</button>
     </span>
   </div>\`).join("");
+  renderSegPanel2();
 }
+// 세그먼트 선택 드롭다운: 어떤 세그먼트를 트리 뎁스로 쓸지 고른다. 최소 1개는 남겨야 하므로
+// 마지막 하나 남았을 때는 해제를 막는다.
+function renderSegPanel2(){
+  const act=activeLevels2();
+  document.getElementById("segcount2").textContent=
+    act.length===LEVELS2.length?"(전체)":"("+act.length+"/"+LEVELS2.length+")";
+  document.getElementById("segpanel2").innerHTML=
+    '<div class="ddhead"><button onclick="allSegs2(true)">전체선택</button></div>'+
+    '<div class="ddgrid">'+LEVELS2.map(k=>{
+      const on=ACTIVE2.has(k), lock=on&&act.length<=1;
+      return \`<label class="ddi"><input type="checkbox" \${on?'checked':''} \${lock?'disabled':''} onchange="toggleSeg2('\${k}')">\${esc(DIM_META2[k].label)}</label>\`;
+    }).join("")+'</div>';
+}
+function toggleSeg2(k){
+  if(ACTIVE2.has(k)){ if(activeLevels2().length<=1)return; ACTIVE2.delete(k); }
+  else ACTIVE2.add(k);
+  segReordered2();
+}
+function allSegs2(on){ ACTIVE2=new Set(on?LEVELS2:[LEVELS2[0]]); segReordered2(); }
+function toggleSegDD2(e){e.stopPropagation();document.getElementById("segpanel2").classList.toggle("open");}
+document.addEventListener("click",e=>{if(!document.getElementById("segDD2").contains(e.target))document.getElementById("segpanel2").classList.remove("open");});
+// 순서 변경은 활성 목록 기준으로 하고, 비활성 세그먼트는 뒤에 붙여 순서 정보를 보존한다.
+function reorderActive2(act){ LEVELS2=[...act,...LEVELS2.filter(x=>!ACTIVE2.has(x))]; }
 function moveSeg2(k,dir){
-  const i=LEVELS2.indexOf(k), j=i+dir; if(j<0||j>=LEVELS2.length)return;
-  [LEVELS2[i],LEVELS2[j]]=[LEVELS2[j],LEVELS2[i]];
+  const act=activeLevels2();
+  const i=act.indexOf(k), j=i+dir; if(j<0||j>=act.length)return;
+  [act[i],act[j]]=[act[j],act[i]];
+  reorderActive2(act);
   segReordered2();
 }
 function segDragStart2(e){dragKey2=e.currentTarget.dataset.k;e.currentTarget.classList.add("dragging");e.dataTransfer.effectAllowed="move";}
@@ -1652,8 +1706,10 @@ function segDrop2(e){
   e.preventDefault();
   const tgt=e.currentTarget.dataset.k; e.currentTarget.classList.remove("over");
   if(!dragKey2||dragKey2===tgt)return;
-  const from=LEVELS2.indexOf(dragKey2), to=LEVELS2.indexOf(tgt);
-  LEVELS2.splice(from,1); LEVELS2.splice(to,0,dragKey2);
+  const act=activeLevels2();
+  const from=act.indexOf(dragKey2), to=act.indexOf(tgt);
+  act.splice(from,1); act.splice(to,0,dragKey2);
+  reorderActive2(act);
   dragKey2=null;
   segReordered2();
 }

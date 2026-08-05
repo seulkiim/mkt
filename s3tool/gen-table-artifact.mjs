@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from "fs";
-import { dataPath } from "./paths.mjs";
+import { dataPath, outPath } from "./paths.mjs";
 const ROWS = JSON.parse(readFileSync(dataPath("geo-cohort-os-result.json"),"utf8"));
-const OUT = "C:/Users/STZ940/AppData/Local/Temp/claude/C--Users-STZ940-Documents-GitHub-mkt-report/899eecf2-8a64-43ee-88a7-a363205d50ef/scratchpad/geo-cohort-table.html";
+// 구버전 단순 표 리포트(스케줄 대상 아님). 예전에는 gen-tree-artifact.mjs와 같은 파일명으로
+// 출력해 서로 덮어썼기 때문에, 파일명을 분리한다.
+const OUT = outPath("geo-cohort-table-basic.html");
 
 const html = `<title>Performance Table — Idol Farm Life · 7/7–7/13 KST</title>
 <style>
