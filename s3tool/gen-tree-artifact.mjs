@@ -522,7 +522,11 @@ const html = `<title>국가/OS/매체/캠페인/일자별 성과 — Idol Farm L
 :root{
   --bg:#0D1117;--surf:#161B22;--surf2:#1C2128;--border:#21262D;--border2:#30363D;
   --txt:#E6EDF3;--muted:#8B949E;--dim:#484F58;
-  --google:#4E9EFF;--facebook:#FF6B35;--applovin:#C084FC;--liftoff:#34D399;--organic:#7D8590;
+  --google:#4E9EFF;--facebook:#FF6B35;--applovin:#C084FC;--liftoff:#8B95A1;--organic:#A3E635;
+  --moloco:#FFE066;--mintegral:#4257C4;
+  /* 소재카테고리/소재유형 배지 전용 초록 — 예전엔 --liftoff(초록)를 빌려 썼는데 Liftoff가
+     회색으로 바뀌면서(사용자 요청) --muted/--dim 계열과 구분이 안 돼 별도 변수로 분리했다. */
+  --badge-green:#34D399;
   --good:#3FB950;--warn:#D29922;--bad:#F85149;--accent:#4E9EFF;
 }
 body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:13px;min-height:100vh;}
@@ -973,13 +977,13 @@ for(const r of RAW2){
   r.creative = shortCreative(r.creative,r.media);
   r.creative_cat = creativeCat(r.creative);
 }
-const CCAT_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--liftoff)","(organic)":"var(--organic)","(no creative)":"var(--dim)","(SKAN)":"var(--muted)","기타":"var(--dim)"};
-const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(--applovin)",playable:"var(--liftoff)","(미상)":"var(--dim)"};
+const CCAT_COLOR={core:"var(--google)",char:"var(--applovin)",fake:"var(--facebook)",etc:"var(--muted)",help:"var(--badge-green)","(organic)":"var(--organic)","(no creative)":"var(--dim)","(SKAN)":"var(--muted)","기타":"var(--dim)"};
+const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(--applovin)",playable:"var(--badge-green)","(미상)":"var(--dim)"};
 // "전체 합계" DAU 전용: 국가별·날짜별 dedup 유저 ID(정수). 세그먼트 트리 노드의 DAU(위 DAILY_ACTIVE_RAW
 // 기반, 여러 날짜 단순 합산)와는 별개로, 전체 합계 행만 이 데이터로 "기간 내 실제 순수 유저 수"를 계산한다.
 const DAU_USERS = ${JSON.stringify(DAU_USERS)};
 const MLABEL={"googleadwords_int":"Google","Facebook Ads":"Facebook","applovin_int":"Applovin","liftoff_int":"Liftoff","organic":"Organic"};
-const MCOLOR={"googleadwords_int":"var(--google)","Facebook Ads":"var(--facebook)","applovin_int":"var(--applovin)","liftoff_int":"var(--liftoff)","organic":"var(--organic)"};
+const MCOLOR={"googleadwords_int":"var(--google)","Facebook Ads":"var(--facebook)","applovin_int":"var(--applovin)","liftoff_int":"var(--liftoff)","organic":"var(--organic)","moloco_int":"var(--moloco)","mintegral_int":"var(--mintegral)"};
 // 매체 뎁스 정렬 보조: organic을 항상 맨 아래로 내린다(0이면 동률 → 뒤의 Cost/Install 비교로 넘어감).
 const ORGANIC_LAST=(a,b)=>(a.value==="organic"?1:0)-(b.value==="organic"?1:0);
 const DIM_META={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},date:{label:"설치일"}};
@@ -1194,7 +1198,7 @@ function countryLabel(v){
 function dimLabel(node){
   const v=node.value;
   if(node.dim==="paid_org")return \`<span class="po-pill po-\${esc(v)}">\${esc(v)}</span>\`;
-  if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--organic)'}"></span>\${esc(MLABEL[v]||v)}\`;
+  if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--dim)'}"></span>\${esc(MLABEL[v]||v)}\`;
   if(node.dim==="os")return \`<span class="os-pill os-\${esc(v)}">\${esc(v)}</span>\`;
   if(node.dim==="date")return esc(String(v).slice(5));
   if(node.dim==="campaign")return \`<span class="camp" title="\${esc(v)}">\${esc(v)}</span>\`;
@@ -1592,7 +1596,7 @@ const expanded2=new Set();
 function dimLabel2(node){
   const v=node.value;
   if(node.dim==="paid_org")return \`<span class="po-pill po-\${esc(v)}">\${esc(v)}</span>\`;
-  if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--organic)'}"></span>\${esc(MLABEL[v]||v)}\`;
+  if(node.dim==="media")return \`<span class="dot" style="background:\${MCOLOR[v]||'var(--dim)'}"></span>\${esc(MLABEL[v]||v)}\`;
   if(node.dim==="os")return \`<span class="os-pill os-\${esc(v)}">\${esc(v)}</span>\`;
   if(node.dim==="creative_cat")return \`<span class="ctype-pill" style="border-color:\${CCAT_COLOR[v]||'var(--border2)'};color:\${CCAT_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
   if(node.dim==="creative_format")return \`<span class="ctype-pill" style="border-color:\${CFMT_COLOR[v]||'var(--border2)'};color:\${CFMT_COLOR[v]||'var(--txt)'}">\${esc(v)}</span>\`;
@@ -1697,7 +1701,7 @@ function renderTopSpenders2(){
      '</tr></thead><tbody>';
   for(const b of top){
     h+=\`<tr>
-      <td class="left"><span class="dot" style="background:\${MCOLOR[b.media]||'var(--organic)'}"></span>\${esc(MLABEL[b.media]||b.media)}</td>
+      <td class="left"><span class="dot" style="background:\${MCOLOR[b.media]||'var(--dim)'}"></span>\${esc(MLABEL[b.media]||b.media)}</td>
       <td class="left"><span class="camp" title="\${esc(b.campaign)}">\${esc(b.campaign)}</span></td>
       <td class="left"><span class="camp" title="\${esc(b.creative)}">\${esc(b.creative)}</span></td>
       <td><span class="ctype-pill" style="border-color:\${CCAT_COLOR[b.creative_cat]||'var(--border2)'};color:\${CCAT_COLOR[b.creative_cat]||'var(--txt)'}">\${esc(b.creative_cat)}</span></td>
