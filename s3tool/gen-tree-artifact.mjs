@@ -980,6 +980,8 @@ const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(
 const DAU_USERS = ${JSON.stringify(DAU_USERS)};
 const MLABEL={"googleadwords_int":"Google","Facebook Ads":"Facebook","applovin_int":"Applovin","liftoff_int":"Liftoff","organic":"Organic"};
 const MCOLOR={"googleadwords_int":"var(--google)","Facebook Ads":"var(--facebook)","applovin_int":"var(--applovin)","liftoff_int":"var(--liftoff)","organic":"var(--organic)"};
+// 매체 뎁스 정렬 보조: organic을 항상 맨 아래로 내린다(0이면 동률 → 뒤의 Cost/Install 비교로 넘어감).
+const ORGANIC_LAST=(a,b)=>(a.value==="organic"?1:0)-(b.value==="organic"?1:0);
 const DIM_META={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},date:{label:"설치일"}};
 let LEVELS=["country","paid_org","media","date","campaign","os"]; // 사용자가 세그먼트 칩을 드래그/◀▶로 재정렬하면 이 배열이 바뀜(기본값: 국가-paid/org-매체-설치일-캠페인명-os)
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -1148,6 +1150,9 @@ function build(rows,depth,dauNode){
     nodes.push(node);
   }
   if(key==="date")nodes.sort((a,b)=>String(a.value).localeCompare(String(b.value))); // 오름차순
+  // 매체 뎁스는 organic을 항상 맨 아래로(사용자 요청). Cost=0끼리는 Install로 정렬되는데,
+  // organic은 설치가 많아 유료 매체(Mintegral 등) 위로 올라와 버리기 때문.
+  else if(key==="media")nodes.sort((a,b)=>ORGANIC_LAST(a,b) || b.cost-a.cost || b.install_total-a.install_total);
   else nodes.sort((a,b)=>b.cost-a.cost || b.install_total-a.install_total); // Cost 내림차순, Cost=0(동률)이면 Install Total 내림차순
   return nodes;
 }
@@ -1572,6 +1577,7 @@ function build2(rows,depth){
     nodes.push(node);
   }
   if(key==="week")nodes.sort((a,b)=>String(a.value).localeCompare(String(b.value))); // 오름차순
+  else if(key==="media")nodes.sort((a,b)=>ORGANIC_LAST(a,b) || b.cost-a.cost || b.install_total-a.install_total); // organic 최하단(사용자 요청)
   else nodes.sort((a,b)=>b.cost-a.cost || b.install_total-a.install_total);
   return nodes;
 }
