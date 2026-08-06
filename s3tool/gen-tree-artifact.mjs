@@ -690,7 +690,7 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
 
 <div class="hdr">
   <div class="hdr-title">📊 국가/OS/매체/캠페인/일자별 성과 — Idol Farm Life</div>
-  <div class="hdr-sub" id="hdrSub">${RANGE} KST · 각 레벨 합계, Cost 내림차순 · 설치일(코호트) 기준 · 매일 오전 11시 갱신</div>
+  <div class="hdr-sub" id="hdrSub">${RANGE} KST · 각 레벨 합계, Cost 내림차순 · 설치일(코호트) 기준 · 매일 오전 11시·오후 2시 30분 갱신</div>
 </div>
 <div class="tabbar">
   <button class="tabbtn active" id="tabbtn-summary" onclick="showTab('summary')">Summary</button>
