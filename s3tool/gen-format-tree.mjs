@@ -58,6 +58,16 @@ tfoot td{position:sticky;bottom:0;background:var(--surf2);font-weight:700;border
 .ddi{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 6px;border-radius:4px;cursor:pointer;color:var(--txt);}
 .ddi:hover{background:var(--surf2);}
 .ddi input{accent-color:var(--accent);}
+/* 설치일 필터: 월(月) 행 → (펼치면) 일자 그리드 */
+.dfwrap{max-height:300px;overflow:auto;min-width:212px;}
+.dfmonth{border-bottom:1px solid var(--border);}
+.dfmonth:last-child{border-bottom:none;}
+.dfmrow{display:flex;align-items:center;}
+.dfcaret{width:16px;flex-shrink:0;text-align:center;font-size:9px;color:var(--muted);cursor:pointer;user-select:none;transition:transform .12s;}
+.dfcaret:hover{color:var(--txt);}
+.dfmlabel{flex:1;font-weight:700;}
+.dfcount{margin-left:auto;font-size:10px;color:var(--dim);font-weight:500;}
+.dfdays{grid-template-columns:1fr 1fr 1fr;padding:1px 0 6px 18px;max-height:none;overflow:visible;}
 .ordrow{display:flex;align-items:center;gap:8px;padding:4px 2px;}
 .ordlvl{width:44px;color:var(--muted);font-size:11px;flex-shrink:0;}
 .ordrow select{flex:1;background:var(--surf2);color:var(--txt);border:1px solid var(--border2);border-radius:4px;padding:4px 6px;font-size:11.5px;}
@@ -174,10 +184,36 @@ function toggle(id){expanded.has(id)?expanded.delete(id):expanded.add(id);render
 function allIds(nodes,acc){for(const n of nodes){if(n.children&&n.children.length){acc.push(n.id);allIds(n.children,acc);}}return acc;}
 function expandAll(){allIds(TREE,[]).forEach(id=>expanded.add(id));render();}
 function collapseAll(){expanded.clear();render();}
+// 설치일 필터: 월(月) 행이 먼저 보이고 ▶를 누르면 그 달의 일자가 펼쳐진다(사용자 요청 — 기간이
+// 한 달을 넘으면서 평평한 일자 목록으로는 원하는 날짜를 찾기 어려워졌다). 월 체크박스는 그 달
+// 전체를 켜고/끄며, 일부만 선택된 달은 indeterminate(–)로 보여 준다.
+const openMonths=new Set();
+function monthsOf(opts){const out=[];for(const d of opts){const k=d.slice(0,7);if(!out.includes(k))out.push(k);}return out;}
+function monthLabel(mk){const p=mk.split("-");return p[0]+"년 "+(+p[1])+"월";}
 function renderChips(){
-  document.getElementById("ddcount").textContent="("+selectedDates.size+")";
-  const items=DATE_OPTIONS.map(d=>\`<label class="ddi"><input type="checkbox" \${selectedDates.has(d)?'checked':''} onchange="toggleDate('\${d}')">\${d.slice(5)}</label>\`).join("");
-  document.getElementById("ddpanel").innerHTML='<div class="ddhead"><button onclick="allDates(true)">전체선택</button><button onclick="allDates(false)">전체해제</button></div><div class="ddgrid">'+items+'</div>';
+  document.getElementById("ddcount").textContent=selectedDates.size===DATE_OPTIONS.length?"(전체)":"("+selectedDates.size+")";
+  let h='<div class="ddhead"><button onclick="allDates(true)">전체선택</button><button onclick="allDates(false)">전체해제</button></div><div class="dfwrap">';
+  for(const mk of monthsOf(DATE_OPTIONS)){
+    const days=DATE_OPTIONS.filter(d=>d.slice(0,7)===mk);
+    const on=days.filter(d=>selectedDates.has(d)).length;
+    const open=openMonths.has(mk);
+    h+=\`<div class="dfmonth"><div class="dfmrow">
+      <span class="dfcaret" style="transform:rotate(\${open?90:0}deg)" onclick="toggleMonthOpen('\${mk}')">▶</span>
+      <label class="ddi dfmlabel"><input type="checkbox" \${on===days.length?'checked':''} data-part="\${(on>0&&on<days.length)?1:0}" onchange="toggleMonth('\${mk}')">\${monthLabel(mk)}<span class="dfcount">\${on}/\${days.length}</span></label>
+    </div>\`;
+    if(open)h+='<div class="ddgrid dfdays">'+days.map(d=>\`<label class="ddi"><input type="checkbox" \${selectedDates.has(d)?'checked':''} onchange="toggleDate('\${d}')">\${+d.slice(8)}일</label>\`).join("")+'</div>';
+    h+='</div>';
+  }
+  const panel=document.getElementById("ddpanel");
+  panel.innerHTML=h+'</div>';
+  // indeterminate는 HTML 속성으로 표현할 수 없어 렌더 후 JS로 지정한다.
+  panel.querySelectorAll('input[data-part="1"]').forEach(el=>{el.indeterminate=true;});
+}
+function toggleMonthOpen(mk){openMonths.has(mk)?openMonths.delete(mk):openMonths.add(mk);renderChips();}
+function toggleMonth(mk){
+  const days=DATE_OPTIONS.filter(d=>d.slice(0,7)===mk), allOn=days.every(d=>selectedDates.has(d));
+  for(const d of days){if(allOn)selectedDates.delete(d);else selectedDates.add(d);}
+  expanded.clear();renderChips();rebuild();
 }
 function toggleDate(d){selectedDates.has(d)?selectedDates.delete(d):selectedDates.add(d);expanded.clear();renderChips();rebuild();}
 function allDates(on){selectedDates.clear();if(on)DATE_OPTIONS.forEach(d=>selectedDates.add(d));expanded.clear();renderChips();rebuild();}

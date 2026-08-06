@@ -590,6 +590,17 @@ tr.grand-total td.left{color:var(--accent);}
 .ddsearch{width:100%;box-sizing:border-box;padding:5px 8px;margin-bottom:6px;background:var(--surf2);border:1px solid var(--border2);border-radius:4px;color:var(--txt);font-size:11.5px;}
 .ddsearch:focus{outline:none;border-color:var(--accent);}
 .ddempty{padding:8px;color:var(--dim);font-size:11px;grid-column:1/-1;}
+/* 설치일 필터: 월(月) 행이 먼저 보이고 캐럿을 누르면 그 달의 일자 그리드가 펼쳐진다.
+   일자가 한 달을 넘어가면서 평평한 체크박스 목록으로는 원하는 날짜를 찾기 어려워졌다(사용자 요청). */
+.dfwrap{max-height:300px;overflow:auto;min-width:212px;}
+.dfmonth{border-bottom:1px solid var(--border);}
+.dfmonth:last-child{border-bottom:none;}
+.dfmrow{display:flex;align-items:center;}
+.dfcaret{width:16px;flex-shrink:0;text-align:center;font-size:9px;color:var(--muted);cursor:pointer;user-select:none;transition:transform .12s;}
+.dfcaret:hover{color:var(--txt);}
+.dfmlabel{flex:1;font-weight:700;}
+.dfcount{margin-left:auto;font-size:10px;color:var(--dim);font-weight:500;}
+.dfdays{grid-template-columns:1fr 1fr 1fr;padding:1px 0 6px 18px;max-height:none;overflow:visible;}
 .note{margin-bottom:14px;font-size:11px;color:var(--muted);background:var(--surf);border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:4px;padding:9px 12px;line-height:1.6;}
 .note-head{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--warn);margin-bottom:6px;}
 .note p{margin:3px 0;}
@@ -661,6 +672,20 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
 .metric-filter{display:flex;gap:6px;margin-bottom:8px;}
 .cm-filter-btn.active{background:var(--accent);color:#04101f;border-color:var(--accent);font-weight:700;}
 .cm-view{width:100%;}
+/* Summary 최상단 전체 요약 위젯 — 선택된 설치일·국가 범위의 합계를 한 줄로 보여준다. */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px;margin-bottom:14px;}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.kpi-val{font-size:21px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.15;}
+.kpi-sub{font-size:10px;color:var(--dim);margin-top:4px;line-height:1.45;}
+/* 차트 hover 오버레이 — 7일 간격으로 찍은 라벨 외의 값은 이 툴팁으로 확인한다. */
+.ctip{position:fixed;z-index:60;display:none;pointer-events:none;background:var(--surf2);border:1px solid var(--border2);border-radius:5px;padding:7px 9px;font-size:11px;color:var(--txt);box-shadow:0 6px 20px rgba(0,0,0,.55);white-space:nowrap;}
+.ctip-d{font-weight:700;margin-bottom:4px;color:var(--accent);}
+.ctip-r{display:flex;justify-content:space-between;gap:14px;}
+.ctip-r i{font-style:normal;color:var(--muted);}
+.ctip-r b{font-variant-numeric:tabular-nums;}
+.hit{fill:transparent;}
+.hit:hover{fill:rgba(255,255,255,.055);}
 </style>
 
 <div class="hdr">
@@ -675,11 +700,14 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
 </div>
 <div class="main">
   <div id="tab-summary" class="tabpanel active">
+    <div class="kpi-row" id="kpiRow"></div>
     <div class="note">
       <div class="note-head">Remark</div>
+      <p>맨 위 요약 위젯은 아래 <b>설치일·국가 필터가 적용된 전체 합계</b>입니다(국가별 그래프의 합).</p>
+      <p><b>e.CPI</b>=Cost÷Install Total. <b>D1/D7 e.ROAS</b>는 해당 코호트 기간이 실제로 도래한 설치일만 모아 계산합니다(D7 e.ROAS에 어제 설치분을 넣으면 과소 집계되므로 제외 — 각 위젯의 회색 설명에 사용된 코호트 구간이 적혀 있습니다). <b>Revenue</b>는 기간 제한 없이 현재까지 관측된 누적 매출(IAA+IAP)입니다.</p>
       <p>국가별 설치일 추이입니다(기본: Cost 상위 ${TOPN}개국).</p>
       <p>단위가 다른 지표를 함께 보기 위해 각 지표를 자체 최댓값 기준 0~100%로 정규화했으며, 막대와 선은 서로 겹치지 않도록 위/아래 별도 구간에 그려집니다.</p>
-      <p>실제 값은 막대/선 위에 표시되며, 마우스를 올리면 더 자세히 확인할 수 있습니다.</p>
+      <p>그래프 위 수치는 데이터가 많아 <b>7일 간격</b>으로만 표시합니다. 그 사이 날짜는 <b>막대·선 위에 마우스를 올리면</b> 오버레이로 그 날짜의 전체 수치를 확인할 수 있습니다.</p>
     </div>
     <div class="bar">
       <div class="barsec">
@@ -702,6 +730,7 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       <span class="lg"><span class="ln" style="background:var(--c-roas)"></span>D1 ROAS</span>
     </div>
     <div class="summary-list" id="summaryList"></div>
+    <div class="ctip" id="ctip"></div>
   </div>
   <div id="tab-table" class="tabpanel">
     <div class="note">
@@ -709,15 +738,24 @@ th.th-toggle-parent:hover{filter:brightness(1.2);}
       <p>설치일(Date) 레벨은 오름차순으로 정렬됩니다.</p>
       <p>AppsFlyer raw 데이터로 생성된 리포트 대시보드입니다.</p>
       <p>설치일 및 국가는 필터링 가능하며, 매출 지표(절대값)은 숨기기/펼치기 할 수 있습니다.</p>
+      <p><b>세그먼트 선택</b>: 6개 세그먼트를 전부 뎁스로 쓰면 트리가 깊어지므로, "세그먼트 선택"에서 필요한 것만 켜서 볼 수 있습니다(칩의 ✕로도 제외 가능). 기본 순서는 설치일›paid/org›매체›캠페인명›국가›OS입니다.</p>
       <p><b>SKAN Install</b>: Apple에서 전달한 paid 매체의 기여 데이터입니다. 따라서 skan install과 regular install이 구분되어있고, 중복은 제거되었습니다. skan의 기여 데이터는 캠페인 레벨에서 확인가능하므로, GEO 세그먼트를 가장 상위로 배치할 경우 WW(SKAN)으로 귀속됩니다.</p>
       <p><b>RR(%)</b>: 코호트 설치자 중 정확히 해당일(Day-N)에 재방문(세션 발생)한 유저 비율입니다. 매출과 무관하게 재방문 자체만 측정합니다. 코호트가 아직 그 일수만큼 지나지 않았다면 0으로 표시됩니다(예: 설치 후 21일 미만 경과 시 D30 RR은 0).</p>
       <p><b>DAU / Active REV</b>: 코호트 아닌, 캘린더 날짜(이벤트 발생일) 기준입니다. '설치일' 레벨이 확정된 node에는 날짜의 실측값이 표시되지만, 국가·캠페인 등 여러 날짜를 아우르는 세그먼트 행에서는 각 날짜의 값을 단순 합산합니다(재방문 유저가 날짜 수만큼 중복 카운트될 수 있음). 단, 맨 위 '전체 합계' 행의 DAU만은 예외로, 하위 세그먼트 값을 단순 합산하지 않고 선택된 기간·국가 범위에서 실제 재방문을 제거(dedup)한 순수 유저 수를 별도로 계산합니다. 따라서 전체 합계 DAU는 세그먼트별 DAU를 모두 더한 값보다 작습니다. Active REV는 재방문 중복 문제가 없어(금액은 이중 계산되지 않음) 전체 합계도 세그먼트와 동일하게 단순 합산합니다.</p>
     </div>
     <div class="segwrap">
       <div class="segbar" id="segbar"></div>
-      <span class="seglabel">세그먼트 계층 (드래그하거나 ◀▶로 순서 변경)</span>
+      <span class="seglabel">세그먼트 계층 (드래그하거나 ◀▶로 순서 변경, ✕로 제외)</span>
     </div>
     <div class="bar">
+      <div class="barsec">
+        <span class="barsec-label">세그먼트</span>
+        <div class="dd" id="segDD">
+          <button class="btn ddbtn" onclick="toggleSegDD(event)">세그먼트 선택 <span id="segcount"></span> ▾</button>
+          <div class="ddpanel" id="segpanel"></div>
+        </div>
+      </div>
+      <div class="bar-divider"></div>
       <div class="barsec">
         <span class="barsec-label">필터</span>
         <div class="dd" id="dateDD">
@@ -987,7 +1025,12 @@ const MCOLOR={"googleadwords_int":"var(--google)","Facebook Ads":"var(--facebook
 // 매체 뎁스 정렬 보조: organic을 항상 맨 아래로 내린다(0이면 동률 → 뒤의 Cost/Install 비교로 넘어감).
 const ORGANIC_LAST=(a,b)=>(a.value==="organic"?1:0)-(b.value==="organic"?1:0);
 const DIM_META={paid_org:{label:"paid/org"},country:{label:"국가"},os:{label:"OS"},media:{label:"매체"},campaign:{label:"캠페인명"},date:{label:"설치일"}};
-let LEVELS=["country","paid_org","media","date","campaign","os"]; // 사용자가 세그먼트 칩을 드래그/◀▶로 재정렬하면 이 배열이 바뀜(기본값: 국가-paid/org-매체-설치일-캠페인명-os)
+// 기본 세그먼트 순서(사용자 요청): 설치일-paid/org-매체-캠페인명-국가-OS.
+// 사용자가 칩을 드래그/◀▶로 재정렬하면 이 배열이 바뀐다. 비활성(체크 해제) 세그먼트는 배열
+// 뒤쪽으로 밀어 두어 다시 켰을 때의 상대 순서를 보존한다(Data Table(소재·주차) 탭과 동일한 방식).
+let LEVELS=["date","paid_org","media","campaign","country","os"];
+let ACTIVE=new Set(LEVELS);
+function activeLevels(){return LEVELS.filter(k=>ACTIVE.has(k));}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 const METRICS=[
   {k:"cost",label:"Cost",type:"$"},
@@ -1123,11 +1166,12 @@ function toggleGroup(g){collapsedGroups.has(g)?collapsedGroups.delete(g):collaps
 // YYYY-MM-DD 문자열 공간이라 값 매칭이 그대로 성립 — date가 아직 고정되지 않은 상위 레벨에서는
 // 여러 날짜에 걸쳐 자동으로 합산되고, date가 고정된 노드/자손에서는 그 날짜 하나의 실측값이 된다).
 function buildDauIndex(rows,depth){
-  if(depth>=LEVELS.length){
+  const ACT=activeLevels();
+  if(depth>=ACT.length){
     let dau=0,active_rev=0;for(const r of rows){dau+=r.dau;active_rev+=r.active_rev;}
     return {dau,active_rev,kids:null};
   }
-  const key=LEVELS[depth];
+  const key=ACT[depth];
   const groups={};
   for(const r of rows){(groups[r[key]]=groups[r[key]]||[]).push(r);}
   const kids={};
@@ -1142,8 +1186,9 @@ function buildDauIndex(rows,depth){
 // 트리 빌드 (레벨별 정렬: 설치일=오름차순, 그 외=Cost 내림차순)
 let idc=0;
 function build(rows,depth,dauNode){
-  if(depth>=LEVELS.length){return null;}
-  const key=LEVELS[depth];
+  const ACT=activeLevels();
+  if(depth>=ACT.length){return null;}
+  const key=ACT[depth];
   const groups={};
   for(const r of rows){(groups[r[key]]=groups[r[key]]||[]).push(r);}
   const nodes=[];
@@ -1257,19 +1302,45 @@ function allIds(nodes,acc){for(const n of nodes){if(n.children&&n.children.lengt
 function expandAll(){allIds(TREE,[]).forEach(id=>expanded.add(id));render();}
 function collapseAll(){expanded.clear();render();}
 
-// 설치일 드롭다운 체크박스
-function renderChips(){
-  document.getElementById("ddcount").textContent="("+selectedDates.size+")";
-  const items=DATE_OPTIONS.map(d=>{
-    const on=selectedDates.has(d), nodata=!DATES_WITH_DATA.has(d);
-    return \`<label class="ddi \${nodata?'nodata':''}" title="\${nodata?'데이터 없음':''}"><input type="checkbox" \${on?'checked':''} onchange="toggleDate('\${d}')">\${d.slice(5)}\${nodata?' ·':''}</label>\`;
-  }).join("");
-  document.getElementById("ddpanel").innerHTML=
-    '<div class="ddhead"><button onclick="allDates(true)">전체선택</button><button onclick="allDates(false)">전체해제</button></div>'+
-    '<div class="ddgrid">'+items+'</div>';
+// ══ 설치일 필터(공통 렌더러) ══
+// 월(月) 행이 먼저 보이고 ▶를 누르면 그 달의 일자가 펼쳐진다(사용자 요청 — 기간이 한 달을 넘으면서
+// 평평한 일자 체크박스 목록으로는 원하는 날짜를 찾기 어려워졌다). 월 체크박스는 그 달 전체를
+// 켜고/끄며, 일부만 선택된 달은 indeterminate(–)로 보여 준다.
+// Summary 탭과 Data Table 탭이 서로 독립된 선택 상태를 갖기 때문에, 상태 Set과 변경 콜백만 다르게
+// 등록해 같은 렌더러를 공유한다(월 펼침 상태도 탭마다 따로 기억).
+const DATE_FILTERS={};
+function dfRegister(name,cfg){DATE_FILTERS[name]={openMonths:new Set(),...cfg};dfRender(name);}
+function dfMonthsOf(opts){const out=[];for(const d of opts){const k=d.slice(0,7);if(!out.includes(k))out.push(k);}return out;}
+function dfMonthLabel(mk){const p=mk.split("-");return p[0]+"년 "+(+p[1])+"월";}
+function dfRender(name){
+  const f=DATE_FILTERS[name], opts=f.options(), sel=f.selected();
+  document.getElementById(f.countId).textContent=sel.size===opts.length?"(전체)":"("+sel.size+")";
+  let h=\`<div class="ddhead"><button onclick="dfAll('\${name}',true)">전체선택</button><button onclick="dfAll('\${name}',false)">전체해제</button></div><div class="dfwrap">\`;
+  for(const mk of dfMonthsOf(opts)){
+    const days=opts.filter(d=>d.slice(0,7)===mk);
+    const on=days.filter(d=>sel.has(d)).length;
+    const open=f.openMonths.has(mk);
+    h+=\`<div class="dfmonth"><div class="dfmrow">
+      <span class="dfcaret" style="transform:rotate(\${open?90:0}deg)" onclick="dfToggleOpen('\${name}','\${mk}')">▶</span>
+      <label class="ddi dfmlabel"><input type="checkbox" \${on===days.length?'checked':''} data-part="\${(on>0&&on<days.length)?1:0}" onchange="dfToggleMonth('\${name}','\${mk}')">\${dfMonthLabel(mk)}<span class="dfcount">\${on}/\${days.length}</span></label>
+    </div>\`;
+    if(open)h+='<div class="ddgrid dfdays">'+days.map(d=>\`<label class="ddi"><input type="checkbox" \${sel.has(d)?'checked':''} onchange="dfToggleDate('\${name}','\${d}')">\${+d.slice(8)}일</label>\`).join("")+'</div>';
+    h+='</div>';
+  }
+  const panel=document.getElementById(f.panelId);
+  panel.innerHTML=h+'</div>';
+  // indeterminate는 HTML 속성으로 표현할 수 없어 렌더 후 JS로 지정한다.
+  panel.querySelectorAll('input[data-part="1"]').forEach(el=>{el.indeterminate=true;});
 }
-function toggleDate(d){selectedDates.has(d)?selectedDates.delete(d):selectedDates.add(d);expanded.clear();renderChips();rebuild();}
-function allDates(on){selectedDates.clear();if(on)DATE_OPTIONS.forEach(d=>selectedDates.add(d));expanded.clear();renderChips();rebuild();}
+function dfToggleOpen(name,mk){const f=DATE_FILTERS[name];f.openMonths.has(mk)?f.openMonths.delete(mk):f.openMonths.add(mk);dfRender(name);}
+function dfToggleDate(name,d){const f=DATE_FILTERS[name],s=f.selected();s.has(d)?s.delete(d):s.add(d);dfRender(name);f.onChange();}
+function dfToggleMonth(name,mk){
+  const f=DATE_FILTERS[name],s=f.selected();
+  const days=f.options().filter(d=>d.slice(0,7)===mk), allOn=days.every(d=>s.has(d));
+  for(const d of days){if(allOn)s.delete(d);else s.add(d);}
+  dfRender(name);f.onChange();
+}
+function dfAll(name,on){const f=DATE_FILTERS[name],s=f.selected();s.clear();if(on)f.options().forEach(d=>s.add(d));dfRender(name);f.onChange();}
 function toggleDD(e){e.stopPropagation();document.getElementById("ddpanel").classList.toggle("open");}
 document.addEventListener("click",e=>{if(!document.getElementById("dateDD").contains(e.target))document.getElementById("ddpanel").classList.remove("open");});
 
@@ -1332,8 +1403,43 @@ function sumCountryDaily(country,dates,osOverride){
   });
 }
 
+// ══ 차트 hover 오버레이 ══
+// 값 라벨은 7일 간격으로만 찍고(30일 넘는 구간에 매일 라벨을 달면 서로 겹쳐 읽을 수 없음),
+// 나머지 날짜는 이 오버레이로 확인한다. 차트마다 series를 등록해 두고 (key, index)로 되찾는다.
+const SUM_SERIES={};
+function sumTipRow(k,v){return \`<div class="ctip-r"><i>\${k}</i><b>\${v}</b></div>\`;}
+function sumTip(ev,key,kind,i){
+  const s=(SUM_SERIES[key]||[])[i]; if(!s)return;
+  const money=v=>"$"+(+v).toLocaleString(undefined,{maximumFractionDigits:2});
+  let h=\`<div class="ctip-d">\${s.date} · \${countryLabel(key)}</div>\`;
+  if(kind==="inst"){
+    h+=sumTipRow("Install Total",s.install_total.toLocaleString());
+    h+=sumTipRow("Cost",money(s.cost));
+    h+=sumTipRow("Total CPI",s.cpi!=null?money(s.cpi):"–");
+  }else{
+    h+=sumTipRow("D1 Rev(IAA+IAP)",money(s.rev_d1_iaa+s.rev_d1_iap));
+    h+=sumTipRow("— IAA",money(s.rev_d1_iaa));
+    h+=sumTipRow("— IAP",money(s.rev_d1_iap));
+    h+=sumTipRow("D1 ROAS",s.roas_d1!=null?s.roas_d1.toFixed(1)+"%":"–");
+    h+=sumTipRow("Cost",money(s.cost));
+  }
+  const el=document.getElementById("ctip");
+  el.innerHTML=h; el.style.display="block";
+  // 커서 오른쪽 아래에 붙이되, 화면 밖으로 나가면 반대쪽으로 뒤집는다.
+  const pad=14, w=el.offsetWidth, hh=el.offsetHeight;
+  let x=ev.clientX+pad, y=ev.clientY+pad;
+  if(x+w>window.innerWidth-8)x=Math.max(8,ev.clientX-w-pad);
+  if(y+hh>window.innerHeight-8)y=Math.max(8,ev.clientY-hh-pad);
+  el.style.left=x+"px"; el.style.top=y+"px";
+}
+function sumTipHide(){document.getElementById("ctip").style.display="none";}
+// 날짜 열 전체를 덮는 투명 rect — 막대가 낮거나 값이 0인 날짜에도 hover가 잡히게 한다.
+function sumHitRects(series,key,kind,padL,padT,xStep,plotH){
+  return series.map((s,i)=>\`<rect class="hit" x="\${(padL+xStep*i).toFixed(1)}" y="\${padT}" width="\${xStep.toFixed(1)}" height="\${plotH.toFixed(1)}" onmousemove="sumTip(event,'\${key}','\${kind}',\${i})" onmouseleave="sumTipHide()"/>\`).join("");
+}
+
 // Install Total(막대)+Total CPI(선) — 서로 다른 단위를 함께 보기 위해 각자 최댓값 기준 0~100% 인덱스
-function sumChartInstallCpi(series){
+function sumChartInstallCpi(series,key){
   const W=560,H=180,padL=8,padR=8,padT=14,padB=26;
   const plotW=W-padL-padR, plotH=H-padT-padB, n=series.length||1;
   const xStep=plotW/n;
@@ -1347,23 +1453,23 @@ function sumChartInstallCpi(series){
   const barBandH=plotH*0.55;
   const lineBandH=plotH-barBandH-bandGap;
   const lineBandBottom=padT+lineBandH; // 선 밴드: padT(위,100%) ~ lineBandBottom(아래,0%)
-  const showVal=xStep>=24;
+  const showVal=i=>i%7===0; // 값 라벨·x축 눈금은 7일 간격만(사용자 요청) — 나머지는 hover 오버레이
   let bars="",ticks="";
   series.forEach((s,i)=>{
     const cx=padL+xStep*i+xStep/2;
     if(install[i]!=null){
       const h=(install[i]/100)*barBandH;
-      bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-h).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${h.toFixed(1)}" rx="1.5" fill="var(--c-install)"><title>\${s.date} Install Total \${s.install_total.toLocaleString()}</title></rect>\`;
-      if(showVal)bars+=\`<text x="\${cx.toFixed(1)}" y="\${(baseY-h-3).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.install_total.toLocaleString()}</text>\`;
+      bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-h).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${h.toFixed(1)}" rx="1.5" fill="var(--c-install)"/>\`;
+      if(showVal(i))bars+=\`<text x="\${cx.toFixed(1)}" y="\${(baseY-h-3).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.install_total.toLocaleString()}</text>\`;
     }
-    ticks+=\`<text x="\${cx.toFixed(1)}" y="\${H-6}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.date.slice(5)}</text>\`;
+    if(showVal(i))ticks+=\`<text x="\${cx.toFixed(1)}" y="\${H-6}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.date.slice(5)}</text>\`;
   });
   let cpiPath="",cpiLabels="";
   cpi.forEach((v,i)=>{
     if(v==null)return;
     const x=padL+xStep*i+xStep/2, y=lineBandBottom-(v/100)*lineBandH;
     cpiPath+=(cpiPath?"L":"M")+x.toFixed(1)+","+y.toFixed(1)+" ";
-    if(showVal&&series[i].cpi!=null)cpiLabels+=\`<text x="\${x.toFixed(1)}" y="\${(y-6).toFixed(1)}" font-size="8" fill="var(--c-cpi)" text-anchor="middle">$\${series[i].cpi.toFixed(2)}</text>\`;
+    if(showVal(i)&&series[i].cpi!=null)cpiLabels+=\`<text x="\${x.toFixed(1)}" y="\${(y-6).toFixed(1)}" font-size="8" fill="var(--c-cpi)" text-anchor="middle">$\${series[i].cpi.toFixed(2)}</text>\`;
   });
   return \`<svg viewBox="0 0 \${W} \${H}" class="mini-chart" preserveAspectRatio="none">
     <line x1="\${padL}" y1="\${baseY}" x2="\${W-padR}" y2="\${baseY}" stroke="var(--grid)" stroke-width="1"/>
@@ -1371,12 +1477,13 @@ function sumChartInstallCpi(series){
     \${cpiPath?\`<path d="\${cpiPath.trim()}" fill="none" stroke="var(--c-cpi)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>\`:""}
     \${cpiLabels}
     \${ticks}
+    \${sumHitRects(series,key,"inst",padL,padT,xStep,plotH)}
   </svg>\`;
 }
 
 // D1 Rev(IAA+IAP 누적 막대)+D1 ROAS(선) — 역시 각자 최댓값 기준 인덱스.
 // 막대와 선이 겹치지 않도록 세로 공간을 두 밴드로 분리(아래 55% 막대 / 위쪽+10px 간격 선).
-function sumChartRevRoas(series){
+function sumChartRevRoas(series,key){
   const W=560,H=180,padL=8,padR=8,padT=14,padB=26;
   const plotW=W-padL-padR, plotH=H-padT-padB, n=series.length||1;
   const xStep=plotW/n;
@@ -1389,7 +1496,7 @@ function sumChartRevRoas(series){
   const barBandH=plotH*0.55;
   const lineBandH=plotH-barBandH-bandGap;
   const lineBandBottom=padT+lineBandH; // 선 밴드: padT(위,100%) ~ lineBandBottom(아래,0%)
-  const showVal=xStep>=24;
+  const showVal=i=>i%7===0; // 값 라벨·x축 눈금은 7일 간격만(사용자 요청) — 나머지는 hover 오버레이
   let bars="",ticks="";
   series.forEach((s,i)=>{
     const cx=padL+xStep*i+xStep/2;
@@ -1400,18 +1507,18 @@ function sumChartRevRoas(series){
       const gap=(totalH>6&&iaaFrac>0&&iapFrac>0)?2:0;
       const iaaH=Math.max(0,totalH*iaaFrac-gap/2);
       const iapH=Math.max(0,totalH*iapFrac-gap/2);
-      if(iaaH>0)bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-iaaH).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${iaaH.toFixed(1)}" rx="1.5" fill="var(--c-iaa)"><title>\${s.date} D1 IAA $\${s.rev_d1_iaa.toFixed(2)}</title></rect>\`;
-      if(iapH>0)bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-iaaH-gap-iapH).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${iapH.toFixed(1)}" rx="1.5" fill="var(--c-iap)"><title>\${s.date} D1 IAP $\${s.rev_d1_iap.toFixed(2)}</title></rect>\`;
-      if(showVal)bars+=\`<text x="\${cx.toFixed(1)}" y="\${(baseY-iaaH-gap-iapH-3).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="middle">$\${rt.toFixed(0)}</text>\`;
+      if(iaaH>0)bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-iaaH).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${iaaH.toFixed(1)}" rx="1.5" fill="var(--c-iaa)"/>\`;
+      if(iapH>0)bars+=\`<rect x="\${(cx-barW/2).toFixed(1)}" y="\${(baseY-iaaH-gap-iapH).toFixed(1)}" width="\${barW.toFixed(1)}" height="\${iapH.toFixed(1)}" rx="1.5" fill="var(--c-iap)"/>\`;
+      if(showVal(i))bars+=\`<text x="\${cx.toFixed(1)}" y="\${(baseY-iaaH-gap-iapH-3).toFixed(1)}" font-size="8" fill="var(--muted)" text-anchor="middle">$\${rt.toFixed(0)}</text>\`;
     }
-    ticks+=\`<text x="\${cx.toFixed(1)}" y="\${H-6}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.date.slice(5)}</text>\`;
+    if(showVal(i))ticks+=\`<text x="\${cx.toFixed(1)}" y="\${H-6}" font-size="8" fill="var(--muted)" text-anchor="middle">\${s.date.slice(5)}</text>\`;
   });
   let roasPath="",roasLabels="";
   roas.forEach((v,i)=>{
     if(v==null)return;
     const x=padL+xStep*i+xStep/2, y=lineBandBottom-(v/100)*lineBandH;
     roasPath+=(roasPath?"L":"M")+x.toFixed(1)+","+y.toFixed(1)+" ";
-    if(showVal&&series[i].roas_d1!=null)roasLabels+=\`<text x="\${x.toFixed(1)}" y="\${(y-6).toFixed(1)}" font-size="8" fill="var(--c-roas)" text-anchor="middle">\${series[i].roas_d1.toFixed(0)}%</text>\`;
+    if(showVal(i)&&series[i].roas_d1!=null)roasLabels+=\`<text x="\${x.toFixed(1)}" y="\${(y-6).toFixed(1)}" font-size="8" fill="var(--c-roas)" text-anchor="middle">\${series[i].roas_d1.toFixed(0)}%</text>\`;
   });
   return \`<svg viewBox="0 0 \${W} \${H}" class="mini-chart" preserveAspectRatio="none">
     <line x1="\${padL}" y1="\${baseY}" x2="\${W-padR}" y2="\${baseY}" stroke="var(--grid)" stroke-width="1"/>
@@ -1419,12 +1526,54 @@ function sumChartRevRoas(series){
     \${roasPath?\`<path d="\${roasPath.trim()}" fill="none" stroke="var(--c-roas)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>\`:""}
     \${roasLabels}
     \${ticks}
+    \${sumHitRects(series,key,"rev",padL,padT,xStep,plotH)}
   </svg>\`;
+}
+
+// ══ Summary 최상단 전체 요약 위젯 ══
+// 선택된 설치일·국가 범위의 합계. Cost/Revenue/e.CPI는 선택 범위 전체를 그대로 합산하지만,
+// D1/D7 e.ROAS는 그 코호트 기간이 실제로 도래한 설치일만 분자·분모에서 함께 모아 계산한다
+// (어제 설치분을 D7 e.ROAS에 넣으면 Cost는 다 들어가고 매출은 하루치만 들어와 과소 집계됨 —
+//  Cohort Trend 탭의 성숙 코호트 판정과 같은 기준). 각 위젯의 회색 줄에 쓰인 코호트 구간을 적어 둔다.
+const SUM_LAST_DATE=DATE_OPTIONS.length?DATE_OPTIONS[DATE_OPTIONS.length-1]:null;
+function sumDaysAgo(d){return SUM_LAST_DATE?Math.round((Date.parse(SUM_LAST_DATE+"T00:00:00Z")-Date.parse(d+"T00:00:00Z"))/86400000):999;}
+function sumMatureRoas(rows,minDays,revKey){
+  let cost=0,rev=0; const ds=new Set();
+  for(const r of rows){ if(sumDaysAgo(r.date)<minDays)continue; cost+=r.cost; rev+=r[revKey]; ds.add(r.date); }
+  return {roas:cost>0?rev/cost*100:null, dates:ds};
+}
+function sumRangeText(ds){
+  if(!ds.size)return "도래한 코호트 없음";
+  const a=[...ds].sort();
+  return a[0].slice(5).replace("-","/")+"~"+a[a.length-1].slice(5).replace("-","/")+" · "+a.length+"일";
+}
+function renderKpi(rows){
+  let cost=0,inst=0,rev=0;
+  // rev_d30은 "설치 후 30일 내 매출" 누적이고 아직 30일이 지난 코호트가 없으므로, 실질적으로
+  // 현재까지 관측된 전체 누적 매출(IAA+IAP)과 같다 — Revenue 위젯은 이 값을 쓴다.
+  for(const r of rows){cost+=r.cost;inst+=r.install_total;rev+=r.rev_d30;}
+  const d1=sumMatureRoas(rows,1,"rev_d1"), d7=sumMatureRoas(rows,7,"rev_d7");
+  const money=v=>"$"+(+v).toLocaleString(undefined,{maximumFractionDigits:0});
+  const roasVal=v=>v==null?'<span class="na">–</span>':\`<span class="\${roasCls(v)}">\${v.toFixed(1)}%</span>\`;
+  const selDates=[...sumSelectedDates].sort();
+  // 국가 수를 함께 적어 둔다 — 기본값이 Cost 상위 ${TOPN}개국이라, 국가 필터를 건드리지 않은
+  // 상태의 이 합계는 "전 세계 총합"이 아니라 "아래 그래프에 보이는 국가들의 합"이다.
+  const scope=(selDates.length?sumRangeText(new Set(selDates)):"선택된 설치일 없음")+" · "+sumSelectedCountries.size+"개국";
+  const tiles=[
+    {label:"Cost",       val:money(cost), sub:scope},
+    {label:"Revenue",    val:money(rev),  sub:"현재까지 누적 (IAA+IAP)"},
+    {label:"e.CPI",      val:inst>0?"$"+(cost/inst).toFixed(2):'<span class="na">–</span>', sub:"Install Total "+inst.toLocaleString()},
+    {label:"D1 e.ROAS",  val:roasVal(d1.roas), sub:"코호트 "+sumRangeText(d1.dates)},
+    {label:"D7 e.ROAS",  val:roasVal(d7.roas), sub:"코호트 "+sumRangeText(d7.dates)},
+  ];
+  document.getElementById("kpiRow").innerHTML=tiles.map(t=>
+    \`<div class="kpi"><div class="kpi-label">\${t.label}</div><div class="kpi-val">\${t.val}</div><div class="kpi-sub">\${t.sub}</div></div>\`).join("");
 }
 
 function renderSummary(){
   const dates=DATE_OPTIONS.filter(d=>sumSelectedDates.has(d));
   const countries=[...sumSelectedCountries].filter(c=>COUNTRY_OPTIONS.includes(c));
+  renderKpi(RAW.filter(r=>sumSelectedDates.has(r.date)&&sumSelectedCountries.has(r.country)));
   const withCost=countries.map(c=>{
     const series=sumCountryDaily(c,dates);
     const cost=series.reduce((s,x)=>s+x.cost,0);
@@ -1435,6 +1584,7 @@ function renderSummary(){
   }).sort((a,b)=>b.installTotal-a.installTotal); // Install Total 내림차순 고정
   document.getElementById("summaryList").innerHTML=withCost.length?withCost.map(({country,series,cost})=>{
     const osSel=sumOsFilter[country]||"ALL";
+    SUM_SERIES[country]=series; // hover 오버레이가 (국가, index)로 되찾을 수 있게 등록
     const osBtns=\`<div class="metric-filter">
       <button class="btn cm-filter-btn \${osSel==="ALL"?"active":""}" onclick="setSumOs('\${country}','ALL')">Total</button>
       <button class="btn cm-filter-btn \${osSel==="iOS"?"active":""}" onclick="setSumOs('\${country}','iOS')">iOS</button>
@@ -1445,25 +1595,13 @@ function renderSummary(){
       <div class="country-row-head"><span class="country-row-title">\${countryLabel(country)}</span><span class="country-row-sub">Cost $\${cost.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
       \${osBtns}
       <div class="country-charts">
-        <div class="chart-panel"><div class="chart-panel-title">Install Total · Total CPI</div>\${sumChartInstallCpi(series)}</div>
-        <div class="chart-panel"><div class="chart-panel-title">D1 Rev(IAA+IAP) · D1 ROAS</div>\${sumChartRevRoas(series)}</div>
+        <div class="chart-panel"><div class="chart-panel-title">Install Total · Total CPI</div>\${sumChartInstallCpi(series,country)}</div>
+        <div class="chart-panel"><div class="chart-panel-title">D1 Rev(IAA+IAP) · D1 ROAS</div>\${sumChartRevRoas(series,country)}</div>
       </div>
     </div>\`;
   }).join(""):'<p class="tabnote">선택된 국가가 없습니다.</p>';
 }
 
-function renderSumChips(){
-  document.getElementById("sumddcount").textContent="("+sumSelectedDates.size+")";
-  const items=DATE_OPTIONS.map(d=>{
-    const on=sumSelectedDates.has(d);
-    return \`<label class="ddi"><input type="checkbox" \${on?'checked':''} onchange="toggleSumDate('\${d}')">\${d.slice(5)}</label>\`;
-  }).join("");
-  document.getElementById("sumddpanel").innerHTML=
-    '<div class="ddhead"><button onclick="allSumDates(true)">전체선택</button><button onclick="allSumDates(false)">전체해제</button></div>'+
-    '<div class="ddgrid">'+items+'</div>';
-}
-function toggleSumDate(d){sumSelectedDates.has(d)?sumSelectedDates.delete(d):sumSelectedDates.add(d);renderSumChips();renderSummary();}
-function allSumDates(on){sumSelectedDates.clear();if(on)DATE_OPTIONS.forEach(d=>sumSelectedDates.add(d));renderSumChips();renderSummary();}
 function toggleSumDD(e){e.stopPropagation();document.getElementById("sumddpanel").classList.toggle("open");}
 document.addEventListener("click",e=>{if(!document.getElementById("sumDateDD").contains(e.target))document.getElementById("sumddpanel").classList.remove("open");});
 
@@ -1489,22 +1627,50 @@ function allSumCountries(on){sumSelectedCountries.clear();if(on)COUNTRY_OPTIONS.
 function toggleSumCountryDD(e){e.stopPropagation();document.getElementById("sumcddpanel").classList.toggle("open");}
 document.addEventListener("click",e=>{if(!document.getElementById("sumCountryDD").contains(e.target))document.getElementById("sumcddpanel").classList.remove("open");});
 
-// 세그먼트 순서 칩 (드래그 또는 ◀▶로 재정렬)
+// 세그먼트 순서 칩 (드래그 또는 ◀▶로 재정렬, ✕로 제외) — 활성 세그먼트만 칩으로 표시한다.
 let dragKey=null;
 function renderSegBar(){
   const el=document.getElementById("segbar");
-  el.innerHTML=LEVELS.map((k,i)=>\`<div class="chip" draggable="true" data-k="\${k}"
+  const act=activeLevels();
+  el.innerHTML=act.map((k,i)=>\`<div class="chip" draggable="true" data-k="\${k}"
       ondragstart="segDragStart(event)" ondragover="segDragOver(event)" ondragleave="segDragLeave(event)" ondrop="segDrop(event)" ondragend="segDragEnd(event)">
     <span class="chip-num">\${i+1}</span><span class="chip-label">\${DIM_META[k].label}</span>
     <span class="chip-btns">
       <button class="chip-btn" \${i===0?'disabled':''} onclick="moveSeg('\${k}',-1)" title="앞으로">◀</button>
-      <button class="chip-btn" \${i===LEVELS.length-1?'disabled':''} onclick="moveSeg('\${k}',1)" title="뒤로">▶</button>
+      <button class="chip-btn" \${i===act.length-1?'disabled':''} onclick="moveSeg('\${k}',1)" title="뒤로">▶</button>
+      <button class="chip-btn" \${act.length<=1?'disabled':''} onclick="toggleSeg('\${k}')" title="이 세그먼트 빼기">✕</button>
     </span>
   </div>\`).join("");
+  renderSegPanel();
 }
+// 세그먼트 선택 드롭다운: 어떤 세그먼트를 트리 뎁스로 쓸지 고른다. 최소 1개는 남겨야 하므로
+// 마지막 하나 남았을 때는 해제를 막는다.
+function renderSegPanel(){
+  const act=activeLevels();
+  document.getElementById("segcount").textContent=
+    act.length===LEVELS.length?"(전체)":"("+act.length+"/"+LEVELS.length+")";
+  document.getElementById("segpanel").innerHTML=
+    '<div class="ddhead"><button onclick="allSegs(true)">전체선택</button></div>'+
+    '<div class="ddgrid">'+LEVELS.map(k=>{
+      const on=ACTIVE.has(k), lock=on&&act.length<=1;
+      return \`<label class="ddi"><input type="checkbox" \${on?'checked':''} \${lock?'disabled':''} onchange="toggleSeg('\${k}')">\${esc(DIM_META[k].label)}</label>\`;
+    }).join("")+'</div>';
+}
+function toggleSeg(k){
+  if(ACTIVE.has(k)){ if(activeLevels().length<=1)return; ACTIVE.delete(k); }
+  else ACTIVE.add(k);
+  segReordered();
+}
+function allSegs(on){ ACTIVE=new Set(on?LEVELS:[LEVELS[0]]); segReordered(); }
+function toggleSegDD(e){e.stopPropagation();document.getElementById("segpanel").classList.toggle("open");}
+document.addEventListener("click",e=>{if(!document.getElementById("segDD").contains(e.target))document.getElementById("segpanel").classList.remove("open");});
+// 순서 변경은 활성 목록 기준으로 하고, 비활성 세그먼트는 뒤에 붙여 순서 정보를 보존한다.
+function reorderActive(act){ LEVELS=[...act,...LEVELS.filter(x=>!ACTIVE.has(x))]; }
 function moveSeg(k,dir){
-  const i=LEVELS.indexOf(k), j=i+dir; if(j<0||j>=LEVELS.length)return;
-  [LEVELS[i],LEVELS[j]]=[LEVELS[j],LEVELS[i]];
+  const act=activeLevels();
+  const i=act.indexOf(k), j=i+dir; if(j<0||j>=act.length)return;
+  [act[i],act[j]]=[act[j],act[i]];
+  reorderActive(act);
   segReordered();
 }
 function segDragStart(e){dragKey=e.currentTarget.dataset.k;e.currentTarget.classList.add("dragging");e.dataTransfer.effectAllowed="move";}
@@ -1515,8 +1681,10 @@ function segDrop(e){
   e.preventDefault();
   const tgt=e.currentTarget.dataset.k; e.currentTarget.classList.remove("over");
   if(!dragKey||dragKey===tgt)return;
-  const from=LEVELS.indexOf(dragKey), to=LEVELS.indexOf(tgt);
-  LEVELS.splice(from,1); LEVELS.splice(to,0,dragKey);
+  const act=activeLevels();
+  const from=act.indexOf(dragKey), to=act.indexOf(tgt);
+  act.splice(from,1); act.splice(to,0,dragKey);
+  reorderActive(act);
   dragKey=null;
   segReordered();
 }
@@ -1821,8 +1989,12 @@ function showTab(name){
   if(name==="table")render();
   if(name==="creative")render2();
 }
-renderSegBar();renderChips();renderCountryPanel();rebuild();
-renderSumChips();renderSumCountryPanel();renderSummary();
+renderSegBar();renderCountryPanel();
+dfRegister("main",{countId:"ddcount",panelId:"ddpanel",options:()=>DATE_OPTIONS,selected:()=>selectedDates,onChange:()=>{expanded.clear();rebuild();}});
+rebuild();
+renderSumCountryPanel();
+dfRegister("sum",{countId:"sumddcount",panelId:"sumddpanel",options:()=>DATE_OPTIONS,selected:()=>sumSelectedDates,onChange:()=>renderSummary()});
+renderSummary();
 renderSegBar2();renderCountryPanel2();renderWeekChips2();rebuild2();
 </script>`;
 writeFileSync(OUT, html, "utf8");
