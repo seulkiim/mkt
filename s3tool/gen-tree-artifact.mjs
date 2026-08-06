@@ -982,7 +982,7 @@ const CFMT_COLOR={vid:"var(--facebook)",img:"var(--google)",video_playable:"var(
 // "전체 합계" DAU 전용: 국가별·날짜별 dedup 유저 ID(정수). 세그먼트 트리 노드의 DAU(위 DAILY_ACTIVE_RAW
 // 기반, 여러 날짜 단순 합산)와는 별개로, 전체 합계 행만 이 데이터로 "기간 내 실제 순수 유저 수"를 계산한다.
 const DAU_USERS = ${JSON.stringify(DAU_USERS)};
-const MLABEL={"googleadwords_int":"Google","Facebook Ads":"Facebook","applovin_int":"Applovin","liftoff_int":"Liftoff","organic":"Organic"};
+const MLABEL={"googleadwords_int":"Google","Facebook Ads":"Facebook","applovin_int":"Applovin","liftoff_int":"Liftoff","organic":"Organic","moloco_int":"Moloco","mintegral_int":"Mintegral"};
 const MCOLOR={"googleadwords_int":"var(--google)","Facebook Ads":"var(--facebook)","applovin_int":"var(--applovin)","liftoff_int":"var(--liftoff)","organic":"var(--organic)","moloco_int":"var(--moloco)","mintegral_int":"var(--mintegral)"};
 // 매체 뎁스 정렬 보조: organic을 항상 맨 아래로 내린다(0이면 동률 → 뒤의 Cost/Install 비교로 넘어감).
 const ORGANIC_LAST=(a,b)=>(a.value==="organic"?1:0)-(b.value==="organic"?1:0);
