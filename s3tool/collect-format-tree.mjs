@@ -3,10 +3,11 @@ import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync } from "fs";
 import { dataPath } from "./paths.mjs";
+import { START, END, END_SOURCE } from "./run-window.mjs";
 const BASE = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const APP_IDS=["com.albus.idolharvest","id6756664337"];
-const START="2026-07-07";
-const END=new Date(Date.now()+9*3600000-24*3600000).toISOString().slice(0,10); // 전일(KST)
+// 대상 기간은 run-window.mjs가 정하며 geo-cohort-os.mjs와 공유한다.
+process.stderr.write(`대상 기간: ${START} ~ ${END} (종료일: ${END_SOURCE})\n`);
 function toKST(ts){if(ts==null)return null;const s=String(ts);const n=s.replace(" ","T")+(s.includes("T")||s.includes("+")?"":"Z");const d=typeof ts==="number"?new Date(ts):new Date(n);return isNaN(d)?null:new Date(d.getTime()+9*3600000).toISOString().slice(0,10);}
 function days(a,b){return Math.round((Date.parse(b+"T00:00:00Z")-Date.parse(a+"T00:00:00Z"))/86400000);}
 const inR=d=>d>=START&&d<=END;

@@ -3,20 +3,16 @@ import { client, BUCKET } from "./aws-client.mjs";
 import { parquetMetadata, parquetRead } from "hyparquet";
 import { writeFileSync, readFileSync, renameSync } from "fs";
 import { dataPath } from "./paths.mjs";
+import { START, END, END_SOURCE, dateRange } from "./run-window.mjs";
 
 const BASE   = "c7yL-acc-m4k6c7yL-c7yL/wemadeplay/";
 const OS_OF = { "com.albus.idolharvest":"Android", "id6756664337":"iOS" };
 const APP_IDS = Object.keys(OS_OF);
 
-// 대상 기간: 2026-07-07 ~ 전일(KST). 매일 실행 시 종료일이 자동으로 하루씩 늘어남.
-const START="2026-07-07";
-const kstNow=new Date(Date.now()+9*3600000);
-const endStr=new Date(kstNow.getTime()-24*3600000).toISOString().slice(0,10); // 어제(KST)
-const TARGET_KST=[];
-for(let t=Date.parse(START+"T00:00:00Z"); t<=Date.parse(endStr+"T00:00:00Z"); t+=86400000){
-  TARGET_KST.push(new Date(t).toISOString().slice(0,10));
-}
-process.stderr.write(`대상 코호트: ${START} ~ ${endStr} (${TARGET_KST.length}일)\n`);
+// 대상 기간: 2026-07-07 ~ 전일(KST). 종료일은 run-window.mjs가 정하며 collect-format-tree.mjs와 공유한다.
+const endStr=END;
+const TARGET_KST=dateRange();
+process.stderr.write(`대상 코호트: ${START} ~ ${endStr} (${TARGET_KST.length}일, 종료일: ${END_SOURCE})\n`);
 const inRange = kd => TARGET_KST.includes(kd);
 
 function toKSTDate(ts){ if(ts==null)return null; const s=String(ts); const norm=s.replace(" ","T")+(s.includes("T")||s.includes("+")?"":"Z"); const d=typeof ts==="number"?new Date(ts):new Date(norm); return isNaN(d.getTime())?null:new Date(d.getTime()+9*3600000).toISOString().slice(0,10); }
